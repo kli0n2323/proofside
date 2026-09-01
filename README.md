@@ -1,17 +1,16 @@
 # Proofside
 
 Proofside is intended to become a lightweight sidecar for mathematical research
-code: a researcher will point it at a typed Python function, review an explicit
-mathematical contract, and ask a formal verifier to check the implementation.
-This repository currently contains only the Milestone 0 proof of concept; it has
-no LLM code, and Nagini/Viper performs the actual verification.
+code: a researcher points it at a typed Python function, reviews an explicit
+mathematical contract, and asks a formal verifier to check the implementation.
+This repository currently contains only the Milestone 1 command-line proof of
+concept. Contracts are still written manually, and Nagini/Viper performs the
+actual verification; contract generation comes later.
 
-## Run the demonstration
+## Install and run
 
 Prerequisites are a 64-bit Python 3.12--3.14 installation and a 64-bit Java 11+
-runtime. Nagini normally discovers Java automatically; if it does not, set
-`JAVA_HOME` to the Java installation root. From the repository root, create an
-isolated environment and install the pinned verifier:
+runtime. Create an isolated environment from the repository root:
 
 ```bash
 python -m venv .venv
@@ -20,24 +19,45 @@ python -m venv .venv
 python -m pip install -r requirements-verification.txt
 ```
 
-Run the two cases with Nagini's default Silicon backend:
+Run Proofside from the repository root:
 
 ```bash
-nagini --verifier silicon examples/shot_budget_good.py
-nagini --verifier silicon examples/shot_budget_bad.py
+python -m proofside check examples/shot_budget_good.py::allocate_remaining
+python -m proofside check examples/shot_budget_bad.py::allocate_remaining
 ```
 
-The good function allocates a nonnegative remainder to a second bucket and proves
-that the two nonnegative allocations sum to the declared nonnegative shot budget.
-The bad function differs only by `+ 1`, so it over-allocates one shot. Nagini must
-reject its budget-conservation postcondition; this failure is the expected result.
+The good function returns the nonnegative remainder of a two-bucket shot budget
+and proves that both allocations conserve the declared total. The bad function
+differs only by `+ 1`, so Nagini rejects its conservation postcondition.
+
+Proofside reports one of four states:
+
+- `VERIFIED`: Nagini/Viper discharged the declared proof obligations.
+- `FAILED`: Nagini ran, but at least one proof obligation was not established.
+  This does not necessarily mean Nagini produced a concrete counterexample.
+- `UNSUPPORTED`: the target is clearly outside this milestone's narrow workflow.
+- `ERROR`: malformed input or a setup, translation, filesystem, or subprocess
+  problem prevented a meaningful proof run.
+
+The current selector accepts one top-level synchronous function with complete
+parameter and return annotations, no decorators, and at least one direct
+`Requires` or `Ensures` call. Proofside parses the file with the standard-library
+AST without importing or executing it, then asks Nagini's Silicon backend to
+verify only the named function. Deeper Python and contract compatibility remains
+Nagini's responsibility.
+
+On Windows, set `JAVA_HOME` to the Java installation root if Nagini cannot find
+the JVM even though `java` is on `PATH`. Run the fast Proofside-owned tests with:
+
+```bash
+python -m unittest discover -s tests -v
+```
 
 Formal verification establishes that an implementation satisfies a stated
 specification under its assumptions. It does not establish that the specification
 is scientifically meaningful or that a scientific model corresponds to reality.
-This example also does not address integer bounds, runtime callers that violate the
-preconditions, variable-length allocations, floating-point behavior, or any future
-Proofside workflow.
+This milestone also does not address runtime callers that violate preconditions,
+variable-length allocations, floating-point behavior, or contract generation.
 
 ## Third-party software
 
@@ -48,6 +68,6 @@ Proofside workflow.
 | [Z3](https://github.com/Z3Prover/z3) | 4.8.7.0, installed transitively | MIT | SMT solver used through Viper |
 
 Proofside depends on these tools; it does not incorporate or adapt their source
-code. Python and a Java runtime are execution prerequisites, with licenses supplied
-by their respective distributions.
+code. The CLI and tests add no third-party dependency. Python and a Java runtime
+are execution prerequisites, with licenses supplied by their distributions.
 
