@@ -43,7 +43,7 @@ The current selector accepts one top-level synchronous function with complete
 parameter and return annotations, no decorators, and at least one direct
 `Requires` or `Ensures` call. Proofside parses the file with the standard-library
 AST without importing or executing it, then asks Nagini's Silicon backend to
-verify only the named function. Deeper Python and contract compatibility remains
+verify only the named function. Deeper Python and contract compatibility remain
 Nagini's responsibility.
 
 On Windows, set `JAVA_HOME` to the Java installation root if Nagini cannot find
