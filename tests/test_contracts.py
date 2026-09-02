@@ -24,7 +24,7 @@ from proofside.contracts import (
 
 
 CONTRACT_PATH = Path("examples/sidecar/shot_budget_contract.json")
-OPS_CONTRACT_PATH = Path("examples/research/ops_shot_budget_contract.json")
+RESEARCH_CONTRACT_PATH = Path("examples/research/research_shot_budget_contract.json")
 
 
 def variable(name: str) -> dict[str, object]:
@@ -75,8 +75,8 @@ class ContractParsingTests(unittest.TestCase):
         with self.assertRaisesRegex(ContractError, "only in postconditions"):
             validate_contract(contract, {"total_shots", "first_bucket"})
 
-    def test_ops_contract_uses_existing_ir_and_matches_parameters(self) -> None:
-        contract = load_contract(OPS_CONTRACT_PATH)
+    def test_research_contract_uses_existing_ir_and_matches_parameters(self) -> None:
+        contract = load_contract(RESEARCH_CONTRACT_PATH)
         validate_contract(
             contract,
             {"total_shots", "training_feature_shots", "test_feature_shots"},
@@ -284,7 +284,7 @@ class ExpandedContractTests(unittest.TestCase):
     def test_old_example_contracts_remain_valid(self) -> None:
         for path, parameters in (
             (CONTRACT_PATH, {"total_shots", "first_bucket"}),
-            (OPS_CONTRACT_PATH, {"total_shots", "training_feature_shots", "test_feature_shots"}),
+            (RESEARCH_CONTRACT_PATH, {"total_shots", "training_feature_shots", "test_feature_shots"}),
         ):
             contract = load_contract(path)
             validate_contract(contract, parameters)

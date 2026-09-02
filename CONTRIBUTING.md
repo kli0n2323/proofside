@@ -91,6 +91,9 @@ Keep changes small and focused, add tests for changed Proofside behavior, and
 avoid unrelated refactoring. Describe any new third-party dependency, why the
 standard library was insufficient, and its license implications.
 
-Proofside does not currently require a contributor license agreement. The
-project license will be selected before public release.
+See [`ROADMAP.md`](ROADMAP.md) for suggested contribution directions and which
+larger changes should begin with an issue.
+
+Proofside does not currently require a contributor license agreement.
+Contributions are made under the project's Apache License 2.0.
 

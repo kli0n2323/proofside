@@ -53,7 +53,7 @@ Prefixing commands with `python -m proofside` is also supported.
 | `examples/nagini/` | Direct handwritten Nagini contracts. Proofside supports this path but does not parse Nagini annotations back into its IR. |
 | `examples/annotated/shot_budget_annotated.py` | Smallest annotation-first specification and proposal example. |
 | `examples/annotated/model_workflow_stress.py` | Eight-function model-assisted stress fixture with both matching and intentionally mismatched implementations. Its annotations are normative; bodies are withheld by default. |
-| `examples/research/` | Ops-inspired research bookkeeping example with careful, limited provenance. |
+| `examples/research/` | Research-derived bookkeeping example with careful, limited provenance. |
 | `examples/unsupported/` | A source boundary that Proofside explicitly reports as unsupported. |
 
 ## Declare the intended math
@@ -322,26 +322,28 @@ retry, repair, or verifier-feedback loop.
 ## Research example
 
 ```bash
-proofside check examples/research/ops_shot_budget.py::remaining_feature_shots \
-  --contract examples/research/ops_shot_budget_contract.json
+proofside check examples/research/research_shot_budget.py::remaining_feature_shots \
+  --contract examples/research/research_shot_budget_contract.json
 ```
 
 This synthetic bookkeeping kernel is inspired by two motifs in the author's
-Ops research workflow: finite-shot Pauli feature acquisition and train/test
+research workflow: finite-shot Pauli feature acquisition and train/test
 separation. It is not copied from that implementation and does not represent a
-canonical Ops allocation policy. The private research repository is not needed
-to understand or run this self-contained example.
+canonical allocation policy. The private research repository is not needed to
+understand or run this self-contained example.
 
 The contract proves a nonnegative remainder and conservation of the declared
 counts under its assumptions. It does not prove that the split is optimal, that
-the acquisition choices are scientifically appropriate, that Ops improves a
-downstream task, or that a policy transfers to hardware.
+the acquisition choices are scientifically appropriate, that the method
+improves a downstream task, or that a policy transfers to hardware.
 
 ## Development
 
 See [`CONTRIBUTING.md`](CONTRIBUTING.md) for setup, tests, the code map, and
 design constraints. If Nagini cannot find Java—especially on Windows—set
 `JAVA_HOME` to the Java installation root.
+
+See [`ROADMAP.md`](ROADMAP.md) for suggested contribution directions.
 
 ## Third-party software and license status
 
@@ -355,6 +357,5 @@ Proofside depends on these projects but contains no copied or adapted
 third-party source. Python and Java are execution prerequisites distributed
 under their respective licenses.
 
-The Proofside project license has deliberately not yet been selected. A license
-will be applied before public release.
+Proofside is licensed under the Apache License 2.0. See [`LICENSE`](LICENSE).
 
