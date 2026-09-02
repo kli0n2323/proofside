@@ -1,0 +1,41 @@
+{
+  "requires": [
+    {
+      "kind": "compare",
+      "operator": ">=",
+      "left": {"kind": "variable", "name": "total_shots"},
+      "right": {"kind": "integer", "value": 0}
+    },
+    {
+      "kind": "compare",
+      "operator": ">=",
+      "left": {"kind": "variable", "name": "first_bucket"},
+      "right": {"kind": "integer", "value": 0}
+    },
+    {
+      "kind": "compare",
+      "operator": "<=",
+      "left": {"kind": "variable", "name": "first_bucket"},
+      "right": {"kind": "variable", "name": "total_shots"}
+    }
+  ],
+  "ensures": [
+    {
+      "kind": "compare",
+      "operator": ">=",
+      "left": {"kind": "result"},
+      "right": {"kind": "integer", "value": 0}
+    },
+    {
+      "kind": "compare",
+      "operator": "==",
+      "left": {
+        "kind": "add",
+        "left": {"kind": "variable", "name": "first_bucket"},
+        "right": {"kind": "result"}
+      },
+      "right": {"kind": "variable", "name": "total_shots"}
+    }
+  ]
+}
+

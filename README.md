@@ -3,9 +3,9 @@
 Proofside is intended to become a lightweight sidecar for mathematical research
 code: a researcher points it at a typed Python function, reviews an explicit
 mathematical contract, and asks a formal verifier to check the implementation.
-This repository currently contains only the Milestone 1 command-line proof of
-concept. Contracts are still written manually, and Nagini/Viper performs the
-actual verification; contract generation comes later.
+This repository currently contains only the Milestone 2 proof of concept.
+Nagini/Viper performs the actual verification; no ML or contract generation has
+been implemented.
 
 ## Install and run
 
@@ -19,45 +19,57 @@ python -m venv .venv
 python -m pip install -r requirements-verification.txt
 ```
 
-Run Proofside from the repository root:
+The sidecar example keeps the research functions free of Nagini annotations and
+uses one manually written structured JSON contract for both implementations:
+
+```bash
+python -m proofside check examples/shot_budget_plain.py::allocate_remaining --contract examples/shot_budget_contract.json
+python -m proofside check examples/shot_budget_plain_bad.py::allocate_remaining --contract examples/shot_budget_contract.json
+```
+
+Proofside validates the JSON against the selected function, renders the same
+contract for the reader, and deterministically lowers it to Nagini `Requires` and
+`Ensures` statements. It verifies a temporary file containing only the selected
+function and generated annotations, then removes that file. The original source
+is never modified.
+
+The existing handwritten-Nagini mode remains available:
 
 ```bash
 python -m proofside check examples/shot_budget_good.py::allocate_remaining
-python -m proofside check examples/shot_budget_bad.py::allocate_remaining
 ```
 
-The good function returns the nonnegative remainder of a two-bucket shot budget
-and proves that both allocations conserve the declared total. The bad function
-differs only by `+ 1`, so Nagini rejects its conservation postcondition.
+Proofside reports `VERIFIED` when Nagini/Viper discharges the obligations,
+`FAILED` when a proof obligation is not established, `UNSUPPORTED` for a clear
+preflight boundary, and `ERROR` for invalid contracts, malformed input,
+translation failures, or setup/runtime problems. `FAILED` does not necessarily
+mean Nagini produced a concrete counterexample.
 
-Proofside reports one of four states:
+## Current boundary
 
-- `VERIFIED`: Nagini/Viper discharged the declared proof obligations.
-- `FAILED`: Nagini ran, but at least one proof obligation was not established.
-  This does not necessarily mean Nagini produced a concrete counterexample.
-- `UNSUPPORTED`: the target is clearly outside this milestone's narrow workflow.
-- `ERROR`: malformed input or a setup, translation, filesystem, or subprocess
-  problem prevented a meaningful proof run.
+The JSON contract language is deliberately closed. It supports only parameter
+references, integer literals, the function result, addition, and comparisons
+using `>=`, `<=`, or `==`, collected into separate precondition and postcondition
+lists. It contains logical structure, never raw Python or Nagini snippets.
 
-The current selector accepts one top-level synchronous function with complete
-parameter and return annotations, no decorators, and at least one direct
-`Requires` or `Ensures` call. Proofside parses the file with the standard-library
-AST without importing or executing it, then asks Nagini's Silicon backend to
-verify only the named function. Deeper Python and contract compatibility remain
-Nagini's responsibility.
+Sidecar extraction currently accepts simple, self-contained, top-level synchronous
+functions with complete annotations, no decorators, and no function docstring.
+It does not preserve module imports, helpers, comments, closures, or module state.
+Handwritten mode continues to require direct `Requires` or `Ensures` calls.
 
 On Windows, set `JAVA_HOME` to the Java installation root if Nagini cannot find
-the JVM even though `java` is on `PATH`. Run the fast Proofside-owned tests with:
+the JVM even though `java` is on `PATH`. Run fast Proofside-owned tests with:
 
 ```bash
 python -m unittest discover -s tests -v
 ```
 
+The two slow Nagini integration tests are opt-in with
+`PROOFSIDE_RUN_NAGINI=1`.
+
 Formal verification establishes that an implementation satisfies a stated
 specification under its assumptions. It does not establish that the specification
 is scientifically meaningful or that a scientific model corresponds to reality.
-This milestone also does not address runtime callers that violate preconditions,
-variable-length allocations, floating-point behavior, or contract generation.
 
 ## Third-party software
 
@@ -68,6 +80,6 @@ variable-length allocations, floating-point behavior, or contract generation.
 | [Z3](https://github.com/Z3Prover/z3) | 4.8.7.0, installed transitively | MIT | SMT solver used through Viper |
 
 Proofside depends on these tools; it does not incorporate or adapt their source
-code. The CLI and tests add no third-party dependency. Python and a Java runtime
-are execution prerequisites, with licenses supplied by their distributions.
+code. Milestone 2 adds no third-party dependency. Python and a Java runtime are
+execution prerequisites, with licenses supplied by their distributions.
 

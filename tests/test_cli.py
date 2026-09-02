@@ -3,7 +3,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from proofside.cli import Status, check, classify_nagini, inspect_target, parse_selector
+from proofside.cli import Status, check, classify_nagini, load_target, parse_selector
 
 
 class SelectorTests(unittest.TestCase):
@@ -23,7 +23,7 @@ class InspectionTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory, "target.py")
             path.write_text(source, encoding="utf-8")
-            return inspect_target(path, name)
+            return load_target(path, name)
 
     def test_accepts_typed_contracted_top_level_function(self) -> None:
         result = self.inspect_source(
@@ -31,7 +31,7 @@ class InspectionTests(unittest.TestCase):
             "    Ensures(Result() == total)\n"
             "    return total\n"
         )
-        self.assertIsNone(result)
+        self.assertIsInstance(result, tuple)
 
     def test_rejects_nested_function(self) -> None:
         result = self.inspect_source(
