@@ -18,7 +18,7 @@ from .contracts import (
 )
 from .specification import (
     SpecificationAnnotationError,
-    extract_specification_annotations,
+    specification_annotations_for_function,
 )
 
 
@@ -47,19 +47,12 @@ def select_specification_sources(
     requested_sources: tuple[str, ...] | None,
 ) -> tuple[tuple[str, str], ...]:
     try:
-        annotated = next(
-            (
-                item.annotations
-                for item in extract_specification_annotations(source)
-                if item.name == function.name
-            ),
-            None,
-        )
+        annotated = specification_annotations_for_function(source, function)
     except SpecificationAnnotationError as error:
         raise ProposalError(f"invalid Proofside specification annotations: {error}") from error
 
-    equations = annotated.equations if annotated else ()
-    intents = annotated.intents if annotated else ()
+    equations = annotated.equations
+    intents = annotated.intents
     if requested_sources:
         selected = tuple(dict.fromkeys(requested_sources))
     else:
@@ -285,3 +278,4 @@ def render_proposal_output(
         "To verify explicitly:\n"
         f"python -m proofside check {selector} --contract {output_path}"
     )
+

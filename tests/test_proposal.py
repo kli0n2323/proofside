@@ -266,6 +266,64 @@ class SourceSelectionTests(unittest.TestCase):
                     )
             request_model.assert_not_called()
 
+    def test_selected_function_annotations_are_isolated(self) -> None:
+        valid_selected = (
+            "# proofside equation: result = x\n"
+            "def selected(x: int) -> int:\n"
+            "    return x\n\n"
+            "# proofside intent:\n"
+            "def unrelated(y: int) -> int:\n"
+            "    return y\n"
+        )
+        selected_contract = {
+            "requires": [],
+            "ensures": [
+                {
+                    "kind": "compare",
+                    "operator": "==",
+                    "left": {"kind": "result"},
+                    "right": {"kind": "variable", "name": "x"},
+                }
+            ],
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            source_path = write_target(directory, valid_selected)
+            with patch(
+                "proofside.proposal.request_model",
+                return_value=json.dumps(selected_contract),
+            ) as request_model:
+                _contract_text, sources = propose_contract(
+                    f"{source_path}::selected",
+                    "local",
+                    "model",
+                    Path(directory, "valid.json"),
+                )
+
+            request_model.assert_called_once()
+            self.assertEqual(sources, ("equation",))
+
+            malformed_selected = (
+                "# proofside equation:\n"
+                "def selected(x: int) -> int:\n"
+                "    return x\n\n"
+                "# proofside intent: Return y.\n"
+                "def unrelated(y: int) -> int:\n"
+                "    return y\n"
+            )
+            source_path.write_text(malformed_selected, encoding="utf-8")
+            with patch("proofside.proposal.request_model") as request_model:
+                with self.assertRaisesRegex(
+                    ProposalError,
+                    "empty proofside equation annotation",
+                ):
+                    propose_contract(
+                        f"{source_path}::selected",
+                        "local",
+                        "model",
+                        Path(directory, "invalid.json"),
+                    )
+            request_model.assert_not_called()
+
     def test_explicit_implementation_preserves_unannotated_proposal(self) -> None:
         source = (
             "def allocate(total_shots: int, first_bucket: int) -> int:\n"
@@ -700,3 +758,4 @@ class ProposalTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+

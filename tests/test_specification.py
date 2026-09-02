@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ast
 from pathlib import Path
 import tempfile
 import textwrap
@@ -9,6 +10,7 @@ from proofside.specification import (
     SpecificationAnnotationError,
     extract_specification_annotations,
     find_annotated_functions,
+    specification_annotations_for_function,
 )
 
 
@@ -257,6 +259,31 @@ class SpecificationExtractionTests(unittest.TestCase):
 
         self.assertEqual(functions[0].annotations.intents, ("Return Δ unchanged.",))
 
+    def test_selected_function_lookup_ignores_unrelated_malformed_annotation(self) -> None:
+        source = textwrap.dedent(
+            """
+            # proofside equation: result = x
+            def selected(x: int) -> int:
+                return x
+
+            # proofside intent:
+            def unrelated(y: int) -> int:
+                return y
+            """
+        )
+        selected = ast.parse(source).body[0]
+
+        annotations = specification_annotations_for_function(source, selected)
+
+        self.assertEqual(annotations.equations, ("result = x",))
+        self.assertEqual(annotations.intents, ())
+        with self.assertRaisesRegex(
+            SpecificationAnnotationError,
+            "empty proofside intent annotation",
+        ):
+            extract_specification_annotations(source)
+
 
 if __name__ == "__main__":
     unittest.main()
+
