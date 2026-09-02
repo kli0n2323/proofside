@@ -98,7 +98,7 @@ class AcceptanceTests(unittest.TestCase):
 
     def test_invalid_candidates_do_not_create_accepted_contract(self) -> None:
         unknown_operator = json.loads(json.dumps(VALID_CONTRACT))
-        unknown_operator["ensures"][0]["operator"] = ">"
+        unknown_operator["ensures"][0]["operator"] = "=>"
         wrong_parameter = json.loads(json.dumps(VALID_CONTRACT))
         wrong_parameter["requires"][0]["left"]["name"] = "other"
         cases = {

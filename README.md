@@ -27,8 +27,8 @@ python -m pip install .
 Start with a reproducible model-free verification:
 
 ```bash
-proofside check examples/shot_budget_plain.py::allocate_remaining \
-  --contract examples/shot_budget_contract.json
+proofside check examples/sidecar/shot_budget_plain.py::allocate_remaining \
+  --contract examples/sidecar/shot_budget_contract.json
 ```
 
 The contract assumes nonnegative counts with `first_bucket <= total_shots` and
@@ -38,12 +38,23 @@ prints the contract, `VERIFIED`, and an explicit proof boundary.
 Now check the nearly identical broken implementation:
 
 ```bash
-proofside check examples/shot_budget_plain_bad.py::allocate_remaining \
-  --contract examples/shot_budget_contract.json
+proofside check examples/sidecar/shot_budget_plain_bad.py::allocate_remaining \
+  --contract examples/sidecar/shot_budget_contract.json
 ```
 
 Nagini reports `FAILED` because the extra `+ 1` prevents budget conservation.
 Prefixing commands with `python -m proofside` is also supported.
+
+## Examples
+
+| Path | Purpose |
+| --- | --- |
+| `examples/sidecar/` | Model-free Proofside JSON contract workflow: good and bad implementations share one explicit contract. |
+| `examples/nagini/` | Direct handwritten Nagini contracts. Proofside supports this path but does not parse Nagini annotations back into its IR. |
+| `examples/annotated/shot_budget_annotated.py` | Smallest annotation-first specification and proposal example. |
+| `examples/annotated/model_workflow_stress.py` | Eight-function model-assisted stress fixture with both matching and intentionally mismatched implementations. Its annotations are normative; bodies are withheld by default. |
+| `examples/research/` | Ops-inspired research bookkeeping example with careful, limited provenance. |
+| `examples/unsupported/` | A source boundary that Proofside explicitly reports as unsupported. |
 
 ## Declare the intended math
 
@@ -101,7 +112,7 @@ discharged.
 To ask an explicitly selected model for a candidate:
 
 ```bash
-proofside propose examples/shot_budget_annotated.py::allocate_remaining \
+proofside propose examples/annotated/shot_budget_annotated.py::allocate_remaining \
   --model-source api \
   --model MODEL_NAME
 ```
@@ -109,7 +120,7 @@ proofside propose examples/shot_budget_annotated.py::allocate_remaining \
 Without `--out`, this writes:
 
 ```text
-examples/.proofside/shot_budget_annotated.allocate_remaining.candidate.json
+examples/annotated/.proofside/shot_budget_annotated.allocate_remaining.candidate.json
 ```
 
 The response must be exact JSON. Proofside strictly parses and structurally
@@ -117,13 +128,13 @@ validates it, but labels it `PROPOSED — NOT VERIFIED`. Review or edit that fil
 then record the explicit choice to submit it for verification:
 
 ```bash
-proofside accept examples/shot_budget_annotated.py::allocate_remaining
+proofside accept examples/annotated/shot_budget_annotated.py::allocate_remaining
 ```
 
 This retains the candidate and creates:
 
 ```text
-examples/.proofside/shot_budget_annotated.allocate_remaining.contract.json
+examples/annotated/.proofside/shot_budget_annotated.allocate_remaining.contract.json
 ```
 
 Acceptance means only “accepted for verification.” It neither asserts that the
@@ -131,8 +142,8 @@ contract is correct nor runs the verifier. Verification remains a separate
 action:
 
 ```bash
-proofside check examples/shot_budget_annotated.py::allocate_remaining \
-  --contract examples/.proofside/shot_budget_annotated.allocate_remaining.contract.json
+proofside check examples/annotated/shot_budget_annotated.py::allocate_remaining \
+  --contract examples/annotated/.proofside/shot_budget_annotated.allocate_remaining.contract.json
 ```
 
 An explicit `--out custom.json` remains available for proposal, and
@@ -146,7 +157,7 @@ may be checked directly with `check --contract`; it does not have to pass throug
 function:
 
 ```bash
-proofside check examples/shot_budget_good.py::allocate_remaining
+proofside check examples/nagini/shot_budget_good.py::allocate_remaining
 ```
 
 Proofside does not parse handwritten Nagini annotations into its contract IR.
@@ -193,7 +204,7 @@ operations. Only marked top-level functions participate; there is no batch
 contract or multi-function proof.
 
 ```bash
-proofside propose-all research/ --model-source api --model MODEL_NAME
+proofside propose-all examples/annotated/ --model-source api --model MODEL_NAME
 ```
 
 `propose-all` may make one sequential model request per marked function needing
@@ -251,14 +262,29 @@ remains responsible for the specification and its scientific meaning.
 
 ## Supported boundary
 
-The intentionally small closed contract language contains:
+The closed contract language supports:
 
-- parameter variables;
-- integer literals;
-- the function result in postconditions;
-- addition;
-- comparisons using `>=`, `<=`, and `==`;
+- arithmetic values: parameters, integer literals, the result in
+  postconditions, addition, subtraction, negation, and multiplication by an
+  integer constant;
+- logical formulas: `==`, `!=`, `<`, `<=`, `>`, `>=`, `and`, `or`, `not`, and
+  implication;
 - lists of preconditions (`requires`) and postconditions (`ensures`).
+
+This is intentionally close to quantifier-free propositional linear integer
+arithmetic. It excludes arbitrary variable-by-variable multiplication,
+division, powers, quantifiers, arrays, floating point, and arbitrary Python
+expressions.
+
+For example, piecewise intent can be preserved directly:
+
+```text
+value >= 0 -> result == value
+value < 0  -> result == 0
+```
+
+That says more than weakening the function to global bounds such as
+`result >= 0`.
 
 It contains no raw Python or Nagini snippets.
 
@@ -296,8 +322,8 @@ retry, repair, or verifier-feedback loop.
 ## Research example
 
 ```bash
-proofside check examples/ops_shot_budget.py::remaining_feature_shots \
-  --contract examples/ops_shot_budget_contract.json
+proofside check examples/research/ops_shot_budget.py::remaining_feature_shots \
+  --contract examples/research/ops_shot_budget_contract.json
 ```
 
 This synthetic bookkeeping kernel is inspired by two motifs in the author's

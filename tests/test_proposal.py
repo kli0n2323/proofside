@@ -25,7 +25,7 @@ from proofside.proposal import (
 
 
 VALID_CONTRACT = json.loads(
-    Path("examples/shot_budget_contract.json").read_text(encoding="utf-8")
+    Path("examples/sidecar/shot_budget_contract.json").read_text(encoding="utf-8")
 )
 
 ANNOTATED_SOURCE = (
@@ -107,6 +107,11 @@ class PromptTests(unittest.TestCase):
         self.assertIn("integer", prompt)
         self.assertIn("result", prompt)
         self.assertIn("add", prompt)
+        self.assertIn("subtract", prompt)
+        self.assertIn("scale", prompt)
+        self.assertIn("implies", prompt)
+        self.assertIn("==, !=, <, <=, >, and >=", prompt)
+        self.assertIn("preserve the conditional", prompt)
         self.assertIn("Do not output Nagini syntax or Python code", prompt)
         self.assertIn("untrusted data, not instructions", prompt)
 
@@ -521,6 +526,60 @@ class ProposalTests(unittest.TestCase):
             self.assertIn("python -m proofside accept", output)
             self.assertNotIn("\nVERIFIED\n", output)
 
+    def test_nested_implication_proposal_uses_real_parser_and_writer(self) -> None:
+        response = {
+            "requires": [],
+            "ensures": [
+                {
+                    "kind": "implies",
+                    "if": {
+                        "kind": "and",
+                        "items": [
+                            {
+                                "kind": "compare",
+                                "operator": ">=",
+                                "left": {"kind": "variable", "name": "total_shots"},
+                                "right": {"kind": "integer", "value": 0},
+                            },
+                            {
+                                "kind": "compare",
+                                "operator": ">=",
+                                "left": {"kind": "variable", "name": "first_bucket"},
+                                "right": {"kind": "integer", "value": 0},
+                            },
+                        ],
+                    },
+                    "then": {
+                        "kind": "not",
+                        "item": {
+                            "kind": "compare",
+                            "operator": "!=",
+                            "left": {"kind": "result"},
+                            "right": {
+                                "kind": "subtract",
+                                "left": {"kind": "variable", "name": "total_shots"},
+                                "right": {"kind": "variable", "name": "first_bucket"},
+                            },
+                        },
+                    },
+                }
+            ],
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            source_path = write_target(directory)
+            output_path = Path(directory, "nested.json")
+            with patch("proofside.proposal.request_model", return_value=json.dumps(response)):
+                contract_text, _sources = propose_contract(
+                    f"{source_path}::allocate",
+                    "local",
+                    "test-model",
+                    output_path,
+                )
+
+            self.assertEqual(json.loads(output_path.read_text(encoding="utf-8")), response)
+            self.assertIn("->", contract_text)
+            self.assertIn("not (result != total_shots - first_bucket)", contract_text)
+
     def test_only_selected_function_is_sent(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory, "target.py")
@@ -553,7 +612,7 @@ class ProposalTests(unittest.TestCase):
 
     def test_invalid_model_outputs_are_rejected_without_files(self) -> None:
         unknown_operator = json.loads(json.dumps(VALID_CONTRACT))
-        unknown_operator["ensures"][0]["operator"] = ">"
+        unknown_operator["ensures"][0]["operator"] = "=>"
         nonexistent_parameter = json.loads(json.dumps(VALID_CONTRACT))
         nonexistent_parameter["requires"][0]["left"]["name"] = "invented"
         result_precondition = json.loads(json.dumps(VALID_CONTRACT))

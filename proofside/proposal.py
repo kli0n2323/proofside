@@ -113,15 +113,21 @@ of the selected specification sources.
 Output exactly one JSON object and nothing else: no Markdown fences or commentary.
 Do not output Nagini syntax or Python code.
 Use only this closed Proofside format:
-- Values: variable (kind, name), integer (kind, value), result (kind only), or
-  add (kind, left, right).
-- A comparison has kind, operator, left, and right; operator is >=, <=, or ==.
-- A contract has requires and ensures lists of comparisons.
-JSON objects use these exact kind tags: "variable", "integer", "result", "add",
-and "compare". Variables may name only actual parameters. result may appear only
-in ensures. Invent no empirical or scientific claims.
-Compact example for a hypothetical identity(value: int) -> int:
-{{"requires": [], "ensures": [{{"kind": "compare", "operator": "==", "left": {{"kind": "result"}}, "right": {{"kind": "variable", "name": "value"}}}}]}}
+- Values: variable {{kind, name}}, integer {{kind, value}}, result {{kind}},
+  add/subtract {{kind, left, right}}, negate {{kind, value}}, and
+  scale {{kind, factor, value}}, where factor is an integer constant.
+- Formulas: compare {{kind, operator, left, right}}, and/or {{kind, items}},
+  not {{kind, item}}, and implies {{kind, if, then}}. and/or need at least two
+  formulas. Comparison operators are ==, !=, <, <=, >, and >=.
+- A contract has requires and ensures lists of formulas.
+JSON kind tags are exactly "variable", "integer", "result", "add", "subtract",
+"negate", "scale", "compare", "and", "or", "not", and "implies". Variables
+may name only actual parameters. result may appear only in ensures. Invent no
+empirical or scientific claims. When the selected specification states
+conditional behavior representable in this IR, preserve the conditional
+behavior rather than weakening it to only unconditional bounds.
+Compact conditional example for a hypothetical nonnegative_part(value: int) -> int:
+{{"requires": [], "ensures": [{{"kind": "implies", "if": {{"kind": "compare", "operator": ">=", "left": {{"kind": "variable", "name": "value"}}, "right": {{"kind": "integer", "value": 0}}}}, "then": {{"kind": "compare", "operator": "==", "left": {{"kind": "result"}}, "right": {{"kind": "variable", "name": "value"}}}}}}]}}
 Function signature (structural context only):
 {signature}
 Selected specification sources:

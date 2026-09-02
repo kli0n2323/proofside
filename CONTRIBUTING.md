@@ -28,7 +28,7 @@ credential or running model:
 python -m unittest discover -s tests -v
 ```
 
-The five slow integration tests invoke Nagini/Viper. On Linux or macOS:
+The seven slow integration tests invoke Nagini/Viper. On Linux or macOS:
 
 ```bash
 PROOFSIDE_RUN_NAGINI=1 python -m unittest tests.test_integration -v
@@ -60,7 +60,8 @@ by it. Live model calls are not part of the automated suite.
   later verification.
 - `proofside/batch.py` — shared marked-target discovery and thin independent
   `propose-all` / `check-all` orchestration.
-- `examples/` — runnable handwritten and sidecar good/bad demonstrations.
+- `examples/` — workflow-organized sidecar, handwritten Nagini, annotated,
+  research-inspired, and unsupported demonstrations.
 - `tests/` — fast Proofside-owned boundaries and opt-in Nagini integrations.
 
 ## Design constraints
