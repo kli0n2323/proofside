@@ -182,13 +182,17 @@ def render_nagini(contract: Contract) -> str:
     return "\n".join(lines)
 
 
-def build_annotated_source(source: str, function: ast.FunctionDef, contract: Contract) -> str:
+def validate_sidecar_source(function: ast.FunctionDef) -> None:
     if ast.get_docstring(function, clean=False) is not None:
         raise ContractError("sidecar mode does not support function docstrings")
     first_statement = function.body[0]
     if first_statement.lineno == function.lineno:
         raise ContractError("sidecar mode does not support one-line function bodies")
 
+
+def build_annotated_source(source: str, function: ast.FunctionDef, contract: Contract) -> str:
+    validate_sidecar_source(function)
+    first_statement = function.body[0]
     source_lines = source.splitlines()
     function_lines = source_lines[function.lineno - 1:function.end_lineno]
     insertion_index = first_statement.lineno - function.lineno
@@ -197,4 +201,3 @@ def build_annotated_source(source: str, function: ast.FunctionDef, contract: Con
     function_lines[insertion_index:insertion_index] = contract_lines + [""]
     contract_import = "from nagini_contracts.contracts import Ensures, Requires, Result\n\n\n"
     return contract_import + "\n".join(function_lines) + "\n"
-

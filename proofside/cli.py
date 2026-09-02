@@ -254,6 +254,10 @@ def main(argv: list[str] | None = None) -> int:
         "--base-url",
         help="OpenAI-compatible base URL; API is remote and local defaults to localhost",
     )
+    propose_parser.add_argument(
+        "--api-key-env",
+        help="credential environment-variable name required for a custom API base URL",
+    )
     arguments = parser.parse_args(argv)
 
     if arguments.command == "check":
@@ -270,6 +274,7 @@ def main(argv: list[str] | None = None) -> int:
             arguments.model,
             arguments.out,
             arguments.base_url,
+            arguments.api_key_env,
         )
     except ProposalError as error:
         print("PROPOSAL REJECTED")

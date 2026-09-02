@@ -37,6 +37,15 @@ Optionally propose a candidate using an API endpoint:
 python -m proofside propose examples/shot_budget_plain.py::allocate_remaining --model-source api --model MODEL_NAME --out candidate_contract.json
 ```
 
+With no `--base-url`, API mode uses `https://api.openai.com/v1` and reads
+`OPENAI_API_KEY`. A custom API endpoint must use HTTPS and explicitly name its
+own credential environment variable; Proofside will not forward
+`OPENAI_API_KEY` implicitly:
+
+```bash
+python -m proofside propose examples/shot_budget_plain.py::allocate_remaining --model-source api --model MODEL_NAME --base-url https://provider.example/v1 --api-key-env PROVIDER_API_KEY --out candidate_contract.json
+```
+
 Or use a local OpenAI-compatible endpoint, defaulting to Ollama at
 `http://localhost:11434/v1`:
 
@@ -44,8 +53,11 @@ Or use a local OpenAI-compatible endpoint, defaulting to Ollama at
 python -m proofside propose examples/shot_budget_plain.py::allocate_remaining --model-source local --model MODEL_NAME --out candidate_contract.json
 ```
 
-Use `--base-url` to override either endpoint. `propose` sends only the selected
-function source, its signature, and the supported contract-format instructions.
+Local mode is unauthenticated by default; `--api-key-env` is rejected with
+`--model-source local`. `propose` sends only the selected function source, its
+signature, and the supported contract-format instructions. Known sidecar
+source-generation restrictions, including function docstrings and one-line
+bodies, are rejected before a model is contacted.
 The model response is untrusted: it must pass the same strict parser and
 structural validator as a manual sidecar. A successful proposal is labeled
 `NOT VERIFIED`, saved only after validation, and never sent to Nagini. Review or

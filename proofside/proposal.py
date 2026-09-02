@@ -5,10 +5,17 @@ import json
 import os
 from pathlib import Path
 from urllib.error import HTTPError, URLError
+from urllib.parse import urlparse
 from urllib.request import Request, urlopen
 
 from .cli import CheckResult, _function_arguments, load_target, parse_selector
-from .contracts import ContractError, parse_contract, render_human, validate_contract
+from .contracts import (
+    ContractError,
+    parse_contract,
+    render_human,
+    validate_contract,
+    validate_sidecar_source,
+)
 
 
 API_BASE_URL = "https://api.openai.com/v1"
@@ -96,12 +103,42 @@ def request_model(base_url: str, model: str, prompt: str, api_key: str | None) -
     return content
 
 
+def resolve_model_endpoint_and_key(
+    model_source: str,
+    base_url: str | None,
+    api_key_env: str | None,
+) -> tuple[str, str | None]:
+    if model_source == "local":
+        if api_key_env:
+            raise ProposalError("--api-key-env is not supported in local mode")
+        return base_url or LOCAL_BASE_URL, None
+    if model_source != "api":
+        raise ProposalError("model source must be api or local")
+
+    endpoint = base_url or API_BASE_URL
+    if urlparse(endpoint).scheme.lower() != "https":
+        raise ProposalError("API mode requires an https:// endpoint")
+    if base_url is None:
+        if api_key_env:
+            raise ProposalError("--api-key-env requires a custom API --base-url")
+        environment_name = "OPENAI_API_KEY"
+    else:
+        if not api_key_env:
+            raise ProposalError("a custom API endpoint requires --api-key-env")
+        environment_name = api_key_env
+    api_key = os.environ.get(environment_name)
+    if not api_key:
+        raise ProposalError(f"API mode requires environment variable {environment_name}")
+    return endpoint, api_key
+
+
 def propose_contract(
     selector: str,
     model_source: str,
     model: str,
     output_path: Path,
     base_url: str | None = None,
+    api_key_env: str | None = None,
 ) -> str:
     if output_path.exists():
         raise ProposalError(f"output file already exists: {output_path}")
@@ -114,17 +151,17 @@ def propose_contract(
     if isinstance(target, CheckResult):
         raise ProposalError(f"{target.status.value}: {target.detail}")
     source, function = target
+    try:
+        validate_sidecar_source(function)
+    except ContractError as error:
+        raise ProposalError(f"UNSUPPORTED: {error}") from error
 
     prompt = build_proposal_prompt(source, function)
-    if model_source == "api":
-        api_key = os.environ.get("OPENAI_API_KEY")
-        if not api_key:
-            raise ProposalError("API mode requires OPENAI_API_KEY in the environment")
-        endpoint = base_url or API_BASE_URL
-    elif model_source == "local":
-        endpoint, api_key = base_url or LOCAL_BASE_URL, None
-    else:
-        raise ProposalError("model source must be api or local")
+    endpoint, api_key = resolve_model_endpoint_and_key(
+        model_source,
+        base_url,
+        api_key_env,
+    )
     model_text = request_model(endpoint, model, prompt, api_key)
 
     try:
