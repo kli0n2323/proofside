@@ -114,23 +114,39 @@ def allocate_remaining(total_shots: int, first_bucket: int) -> int:
 The signature remains structural context, but the implementation body is not
 sent unless `--source implementation` is explicitly selected. An unannotated
 function therefore requires that option. A successful response is strictly
-parsed, structurally validated, saved, and labeled `PROPOSED — NOT VERIFIED`:
+parsed, structurally validated, saved, and labeled `PROPOSED — NOT VERIFIED`.
+Without `--out`, the candidate for `path/module.py::function` is written to
+`path/.proofside/module.function.candidate.json`:
 
 ```bash
 proofside propose examples/shot_budget_annotated.py::allocate_remaining \
-  --model-source api --model MODEL_NAME --out candidate_contract.json
+  --model-source api --model MODEL_NAME
 ```
 
-Review or edit the candidate, then choose it for verification with a separate
-command:
+Review or edit the candidate, then explicitly accept it for verification. This
+creates `path/.proofside/module.function.contract.json` while retaining the
+candidate:
+
+```bash
+proofside accept examples/shot_budget_annotated.py::allocate_remaining
+```
+
+The candidate is unaccepted. Both files remain `NOT VERIFIED`; acceptance
+records only the user's choice of specification. Verification remains a
+separate command:
 
 ```bash
 proofside check examples/shot_budget_annotated.py::allocate_remaining \
-  --contract candidate_contract.json
+  --contract examples/.proofside/shot_budget_annotated.allocate_remaining.contract.json
 ```
 
-The separation is intentional: proposal never invokes Nagini or accepts a
-specification for you.
+An explicit `--out custom.json` remains available for proposal, and
+`accept --candidate custom.json` accepts a reviewed custom candidate into the
+deterministic `.contract.json` path. Arbitrary manually authored contracts may
+still be passed directly to `check --contract`; `accept` is not required for
+that workflow. Accepted artifacts are protected from overwrite unless the user
+explicitly runs `accept --replace` after supplying a valid candidate. Proposal
+and acceptance never invoke Nagini.
 
 - API mode sends only the selected function context remotely. The default
   OpenAI endpoint reads `OPENAI_API_KEY`.

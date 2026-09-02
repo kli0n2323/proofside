@@ -449,6 +449,49 @@ class SourceSelectionTests(unittest.TestCase):
 
 
 class ProposalTests(unittest.TestCase):
+    def test_default_output_uses_source_adjacent_candidate_path(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            source_path = write_target(directory)
+            expected_path = Path(directory, ".proofside", "target.allocate.candidate.json")
+            with (
+                patch(
+                    "proofside.proposal.request_model",
+                    return_value=json.dumps(VALID_CONTRACT),
+                ),
+                patch("sys.stdout", new_callable=io.StringIO) as stdout,
+            ):
+                exit_code = main(
+                    [
+                        "propose",
+                        f"{source_path}::allocate",
+                        "--model-source",
+                        "local",
+                        "--model",
+                        "test-model",
+                    ]
+                )
+
+            self.assertEqual(exit_code, 0)
+            self.assertTrue(expected_path.is_file())
+            self.assertIn(str(expected_path), stdout.getvalue())
+
+    def test_default_candidate_is_not_overwritten(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            source_path = write_target(directory)
+            output_path = Path(directory, ".proofside", "target.allocate.candidate.json")
+            output_path.parent.mkdir()
+            output_path.write_bytes(b"candidate under review\n")
+            with patch("proofside.proposal.request_model") as request_model:
+                with self.assertRaisesRegex(ProposalError, "already exists"):
+                    propose_contract(
+                        f"{source_path}::allocate",
+                        "local",
+                        "test-model",
+                    )
+
+            request_model.assert_not_called()
+            self.assertEqual(output_path.read_bytes(), b"candidate under review\n")
+
     def test_valid_proposal_is_saved_rendered_and_never_verified(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             source_path = write_target(directory)
@@ -475,7 +518,7 @@ class ProposalTests(unittest.TestCase):
             self.assertIn("PROPOSED — NOT VERIFIED", output)
             self.assertIn("structural validation only", output)
             self.assertIn("Human review", output)
-            self.assertIn("python -m proofside check", output)
+            self.assertIn("python -m proofside accept", output)
             self.assertNotIn("\nVERIFIED\n", output)
 
     def test_only_selected_function_is_sent(self) -> None:

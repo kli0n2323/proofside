@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
 
+from .artifacts import candidate_contract_path
 from .contracts import (
     ContractError,
     build_annotated_source,
@@ -249,7 +250,11 @@ def main(argv: list[str] | None = None) -> int:
         help="api sends selected context remotely; local sends it to the chosen local endpoint",
     )
     propose_parser.add_argument("--model", required=True, help="explicit model name")
-    propose_parser.add_argument("--out", type=Path, required=True, help="new candidate JSON path")
+    propose_parser.add_argument(
+        "--out",
+        type=Path,
+        help="new candidate JSON path; defaults beside the source in .proofside/",
+    )
     propose_parser.add_argument(
         "--base-url",
         help="OpenAI-compatible base URL; API is remote and local defaults to localhost",
@@ -264,12 +269,39 @@ def main(argv: list[str] | None = None) -> int:
         choices=("equation", "intent", "implementation"),
         help="repeatable specification source; defaults to available equation/intent annotations",
     )
+    accept_parser = subparsers.add_parser(
+        "accept",
+        help="explicitly accept a candidate contract for later verification",
+    )
+    accept_parser.add_argument("selector", help="path/to/file.py::function_name")
+    accept_parser.add_argument("--candidate", type=Path, help="candidate JSON path")
+    accept_parser.add_argument(
+        "--replace",
+        action="store_true",
+        help="replace an existing accepted contract after successful validation",
+    )
     arguments = parser.parse_args(argv)
 
     if arguments.command == "check":
         result = check(arguments.selector, arguments.contract)
         print(render_output(result))
         return 0 if result.status is Status.VERIFIED else 1
+
+    if arguments.command == "accept":
+        from .acceptance import AcceptanceError, accept_contract, render_acceptance_output
+
+        try:
+            contract_text, candidate_path, accepted_path = accept_contract(
+                arguments.selector,
+                arguments.candidate,
+                arguments.replace,
+            )
+        except AcceptanceError as error:
+            print("ACCEPTANCE REJECTED")
+            print(error)
+            return 1
+        print(render_acceptance_output(contract_text, candidate_path, accepted_path))
+        return 0
 
     from .proposal import ProposalError, propose_contract, render_proposal_output
 
@@ -287,5 +319,9 @@ def main(argv: list[str] | None = None) -> int:
         print("PROPOSAL REJECTED")
         print(error)
         return 1
-    print(render_proposal_output(arguments.selector, arguments.out, contract_text, sources))
+    output_path = arguments.out
+    if output_path is None:
+        file_path, function_name = parse_selector(arguments.selector)
+        output_path = candidate_contract_path(file_path, function_name)
+    print(render_proposal_output(arguments.selector, output_path, contract_text, sources))
     return 0

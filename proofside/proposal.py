@@ -8,6 +8,7 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import urlparse
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 
+from .artifacts import candidate_contract_path
 from .cli import CheckResult, _function_arguments, load_target, parse_selector
 from .contracts import (
     ContractError,
@@ -209,18 +210,19 @@ def propose_contract(
     selector: str,
     model_source: str,
     model: str,
-    output_path: Path,
+    output_path: Path | None = None,
     base_url: str | None = None,
     api_key_env: str | None = None,
     sources: tuple[str, ...] | None = None,
 ) -> tuple[str, tuple[str, ...]]:
-    if output_path.exists():
-        raise ProposalError(f"output file already exists: {output_path}")
-
     try:
         file_path, function_name = parse_selector(selector)
     except ValueError as error:
         raise ProposalError(str(error)) from error
+    default_output = output_path is None
+    output_path = output_path or candidate_contract_path(file_path, function_name)
+    if output_path.exists():
+        raise ProposalError(f"output file already exists: {output_path}")
     target = load_target(file_path, function_name, require_inline_contract=False)
     if isinstance(target, CheckResult):
         raise ProposalError(f"{target.status.value}: {target.detail}")
@@ -251,6 +253,8 @@ def propose_contract(
         raise ProposalError(f"proposal rejected: {error}") from error
 
     try:
+        if default_output:
+            output_path.parent.mkdir(exist_ok=True)
         with output_path.open("x", encoding="utf-8") as output_file:
             output_file.write(json.dumps(data, indent=2) + "\n")
     except FileExistsError as error:
@@ -274,7 +278,7 @@ def render_proposal_output(
         "This contract was proposed by the selected model.\n"
         "It has passed Proofside's structural validation only.\n"
         "Human review determines whether it is worth accepting.\n"
-        "Review or edit it before verification.\n\n"
-        "To verify explicitly:\n"
-        f"python -m proofside check {selector} --contract {output_path}"
+        "Review or edit it before accepting it for verification.\n\n"
+        "To accept explicitly:\n"
+        f"python -m proofside accept {selector} --candidate {output_path}"
     )
