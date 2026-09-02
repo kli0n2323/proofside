@@ -47,7 +47,10 @@ def extract_specification_annotations(source: str) -> tuple[AnnotatedFunction, .
         leading_comments = []
         line_number = function.lineno - 1
         while line_number in comment_tokens:
-            leading_comments.append(comment_tokens[line_number])
+            token = comment_tokens[line_number]
+            if token.start[1] != function.col_offset:
+                break
+            leading_comments.append(token)
             line_number -= 1
         leading_comments.reverse()
 

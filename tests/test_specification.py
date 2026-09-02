@@ -131,6 +131,21 @@ class SpecificationExtractionTests(unittest.TestCase):
 
         self.assertEqual([function.name for function in functions], ["first"])
 
+    def test_indented_body_comment_does_not_attach_to_next_function(self) -> None:
+        functions = extract(
+            """
+            # proofside equation: result = 1
+            def first() -> int:
+                return 1
+                # proofside equation: result = 2
+            def second() -> int:
+                return 2
+            """
+        )
+
+        self.assertEqual([function.name for function in functions], ["first"])
+        self.assertEqual(functions[0].annotations.equations, ("result = 1",))
+
     def test_several_functions_are_independent_and_in_source_order(self) -> None:
         functions = extract(
             """
