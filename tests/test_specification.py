@@ -10,6 +10,7 @@ from proofside.specification import (
     SpecificationAnnotationError,
     extract_specification_annotations,
     find_annotated_functions,
+    marked_functions_in_source,
     specification_annotations_for_function,
 )
 
@@ -282,6 +283,23 @@ class SpecificationExtractionTests(unittest.TestCase):
             "empty proofside intent annotation",
         ):
             extract_specification_annotations(source)
+
+    def test_marker_discovery_does_not_validate_payloads(self) -> None:
+        source = textwrap.dedent(
+            """
+            # proofside equation: result = x
+            def valid(x: int) -> int:
+                return x
+
+            # proofside intent:
+            def malformed(y: int) -> int:
+                return y
+            """
+        )
+
+        functions = marked_functions_in_source(source)
+
+        self.assertEqual([function.name for function in functions], ["valid", "malformed"])
 
 
 if __name__ == "__main__":

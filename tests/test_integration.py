@@ -1,7 +1,11 @@
+import json
 import os
+import tempfile
 import unittest
 from pathlib import Path
 
+from proofside.artifacts import accepted_contract_path
+from proofside.batch import render_batch_output, run_batch_checks
 from proofside.cli import Status, check
 
 
@@ -42,6 +46,43 @@ class SidecarIntegrationTests(unittest.TestCase):
         self.assertEqual(result.status, Status.FAILED)
         self.assertIn("Postcondition", result.detail)
         self.assertIn("total_shots", result.detail)
+
+    def test_batch_runs_independent_real_verifications(self) -> None:
+        source = (
+            "# proofside equation: result = value\n"
+            "def correct(value: int) -> int:\n"
+            "    return value\n\n"
+            "# proofside equation: result = value\n"
+            "def broken(value: int) -> int:\n"
+            "    return value + 1\n"
+        )
+        contract = {
+            "requires": [],
+            "ensures": [
+                {
+                    "kind": "compare",
+                    "operator": "==",
+                    "left": {"kind": "result"},
+                    "right": {"kind": "variable", "name": "value"},
+                }
+            ],
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            source_path = Path(directory, "batch_example.py")
+            source_path.write_text(source, encoding="utf-8")
+            for name in ("correct", "broken"):
+                contract_path = accepted_contract_path(source_path, name)
+                contract_path.parent.mkdir(exist_ok=True)
+                contract_path.write_text(json.dumps(contract), encoding="utf-8")
+
+            results, errors = run_batch_checks((source_path,))
+
+        self.assertEqual(errors, ())
+        self.assertEqual([item.result.status for item in results], [Status.VERIFIED, Status.FAILED])
+        output = render_batch_output(results, errors)
+        self.assertIn("1/2 VERIFIED", output)
+        self.assertIn("batch_example.py::broken", output)
+        self.assertIn("FAILED", output)
 
 
 if __name__ == "__main__":

@@ -238,6 +238,16 @@ def main(argv: list[str] | None = None) -> int:
     check_parser = subparsers.add_parser("check", help="verify one contracted top-level function")
     check_parser.add_argument("selector", help="path/to/file.py::function_name")
     check_parser.add_argument("--contract", type=Path, help="structured JSON sidecar contract")
+    check_all_parser = subparsers.add_parser(
+        "check-all",
+        help="verify Proofside-marked functions using source-adjacent contracts",
+    )
+    check_all_parser.add_argument("targets", nargs="+", type=Path, help="Python files or directories")
+    check_all_parser.add_argument(
+        "--allow-unreviewed",
+        action="store_true",
+        help="fall back to candidate contracts; still returns a nonzero exit status",
+    )
     propose_parser = subparsers.add_parser(
         "propose",
         help="ask an explicitly selected model for an unverified candidate contract",
@@ -286,6 +296,16 @@ def main(argv: list[str] | None = None) -> int:
         result = check(arguments.selector, arguments.contract)
         print(render_output(result))
         return 0 if result.status is Status.VERIFIED else 1
+
+    if arguments.command == "check-all":
+        from .batch import batch_succeeded, render_batch_output, run_batch_checks
+
+        results, discovery_errors = run_batch_checks(
+            tuple(arguments.targets),
+            arguments.allow_unreviewed,
+        )
+        print(render_batch_output(results, discovery_errors))
+        return 0 if batch_succeeded(results, discovery_errors) else 1
 
     if arguments.command == "accept":
         from .acceptance import AcceptanceError, accept_contract, render_acceptance_output

@@ -45,15 +45,7 @@ def _annotations_for_function(
     comment_tokens: dict[int, tokenize.TokenInfo],
     function: ast.FunctionDef,
 ) -> SpecificationAnnotations:
-    leading_comments = []
-    line_number = function.lineno - 1
-    while line_number in comment_tokens:
-        token = comment_tokens[line_number]
-        if token.start[1] != function.col_offset:
-            break
-        leading_comments.append(token)
-        line_number -= 1
-    leading_comments.reverse()
+    leading_comments = _leading_comments(comment_tokens, function)
 
     equations = []
     intents = []
@@ -75,11 +67,42 @@ def _annotations_for_function(
     return SpecificationAnnotations(tuple(equations), tuple(intents))
 
 
+def _leading_comments(
+    comment_tokens: dict[int, tokenize.TokenInfo],
+    function: ast.FunctionDef,
+) -> tuple[tokenize.TokenInfo, ...]:
+    leading_comments = []
+    line_number = function.lineno - 1
+    while line_number in comment_tokens:
+        token = comment_tokens[line_number]
+        if token.start[1] != function.col_offset:
+            break
+        leading_comments.append(token)
+        line_number -= 1
+    leading_comments.reverse()
+    return tuple(leading_comments)
+
+
 def specification_annotations_for_function(
     source: str,
     function: ast.FunctionDef,
 ) -> SpecificationAnnotations:
     return _annotations_for_function(_comment_tokens(source), function)
+
+
+def marked_functions_in_source(source: str) -> tuple[ast.FunctionDef, ...]:
+    tree = ast.parse(source)
+    comment_tokens = _comment_tokens(source)
+    prefixes = (EQUATION_PREFIX, INTENT_PREFIX)
+    return tuple(
+        function
+        for function in tree.body
+        if isinstance(function, ast.FunctionDef)
+        and any(
+            token.string.startswith(prefixes)
+            for token in _leading_comments(comment_tokens, function)
+        )
+    )
 
 
 def extract_specification_annotations(source: str) -> tuple[AnnotatedFunction, ...]:

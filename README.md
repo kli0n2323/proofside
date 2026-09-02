@@ -161,6 +161,31 @@ parser and validation used for a manually authored sidecar. Exact JSON is
 required; Proofside does not repair or coerce a response. No model is needed for
 verification.
 
+## Batch verification
+
+`check-all` recursively discovers explicitly Proofside-marked top-level
+functions and runs the existing single-function check independently for each:
+
+```bash
+proofside check-all src/ experiments/model.py
+```
+
+It uses source-adjacent accepted `.contract.json` artifacts by default, skips
+hidden directories, and returns nonzero for any missing contract, discovery or
+verification problem. Unmarked functions are ignored; this is a sequence of
+independent proofs, not a multi-function proof.
+
+The conspicuous bypass below may fall back to a `.candidate.json` only when no
+accepted contract exists:
+
+```bash
+proofside check-all src/ --allow-unreviewed
+```
+
+Such results are labeled `UNREVIEWED CONTRACT`, and the overall exit remains
+nonzero even if every candidate-backed proof verifies. `check-all` requires no
+model, API key, or proposal configuration.
+
 ## Supported contract language
 
 The intentionally small closed language contains:
