@@ -194,6 +194,43 @@ def check(selector: str, contract_path: Path | None = None) -> CheckResult:
     return CheckResult(result.status, result.detail, contract_text)
 
 
+def render_proof_boundary(result: CheckResult) -> str:
+    if result.contract_text is None:
+        return ""
+    if result.status is Status.VERIFIED:
+        lines = [
+            "Proof boundary",
+            "- The selected implementation satisfies the displayed guarantees under the displayed assumptions, according to Nagini/Viper.",
+            "- Preconditions remain assumptions about valid callers and inputs.",
+            "- The proof covers only the displayed contract and the supported verification semantics.",
+            "- It does not establish scientific validity, empirical correspondence, usefulness, or optimality.",
+        ]
+        return "\n".join(lines)
+    if result.status is Status.FAILED:
+        lines = [
+            "Proof boundary",
+            "- One or more displayed proof obligations were not established.",
+            "- FAILED does not by itself mean that a concrete counterexample was produced.",
+            "- No conclusion about scientific validity follows from this failed proof attempt.",
+        ]
+        return "\n".join(lines)
+    return ""
+
+
+def render_output(result: CheckResult) -> str:
+    sections = []
+    if result.contract_text:
+        sections.append(f"Contract\n\n{result.contract_text}")
+    status = result.status.value
+    if result.detail:
+        status += f"\n{result.detail}"
+    sections.append(status)
+    boundary = render_proof_boundary(result)
+    if boundary:
+        sections.append(boundary)
+    return "\n\n".join(sections)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="proofside")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -203,13 +240,5 @@ def main(argv: list[str] | None = None) -> int:
     arguments = parser.parse_args(argv)
 
     result = check(arguments.selector, arguments.contract)
-    if result.contract_text:
-        print("Contract\n")
-        print(result.contract_text)
-        print()
-    print(result.status.value)
-    if result.detail:
-        print(result.detail)
+    print(render_output(result))
     return 0 if result.status is Status.VERIFIED else 1
-
-

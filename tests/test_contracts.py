@@ -16,6 +16,7 @@ from proofside.contracts import (
 
 
 CONTRACT_PATH = Path("examples/shot_budget_contract.json")
+OPS_CONTRACT_PATH = Path("examples/ops_shot_budget_contract.json")
 
 
 class ContractParsingTests(unittest.TestCase):
@@ -53,6 +54,19 @@ class ContractParsingTests(unittest.TestCase):
         contract = parse_contract(data)
         with self.assertRaisesRegex(ContractError, "only in postconditions"):
             validate_contract(contract, {"total_shots", "first_bucket"})
+
+    def test_ops_contract_uses_existing_ir_and_matches_parameters(self) -> None:
+        contract = load_contract(OPS_CONTRACT_PATH)
+        validate_contract(
+            contract,
+            {"total_shots", "training_feature_shots", "test_feature_shots"},
+        )
+        self.assertEqual(len(contract.requires), 4)
+        self.assertEqual(len(contract.ensures), 2)
+        self.assertIn(
+            "training_feature_shots + test_feature_shots + result == total_shots",
+            render_human(contract),
+        )
 
 
 class ContractRenderingTests(unittest.TestCase):
@@ -98,4 +112,3 @@ class ContractRenderingTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

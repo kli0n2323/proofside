@@ -27,7 +27,22 @@ class SidecarIntegrationTests(unittest.TestCase):
         self.assertEqual(result.status, Status.FAILED)
         self.assertIn("Postcondition", result.detail)
 
+    def test_ops_shot_budget_verifies(self) -> None:
+        result = check(
+            "examples/ops_shot_budget.py::remaining_feature_shots",
+            Path("examples/ops_shot_budget_contract.json"),
+        )
+        self.assertEqual(result.status, Status.VERIFIED)
+
+    def test_broken_ops_shot_budget_fails_conservation(self) -> None:
+        result = check(
+            "examples/ops_shot_budget_bad.py::remaining_feature_shots",
+            Path("examples/ops_shot_budget_contract.json"),
+        )
+        self.assertEqual(result.status, Status.FAILED)
+        self.assertIn("Postcondition", result.detail)
+        self.assertIn("total_shots", result.detail)
+
 
 if __name__ == "__main__":
     unittest.main()
-

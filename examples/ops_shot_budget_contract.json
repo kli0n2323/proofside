@@ -9,13 +9,23 @@
     {
       "kind": "compare",
       "operator": ">=",
-      "left": {"kind": "variable", "name": "first_bucket"},
+      "left": {"kind": "variable", "name": "training_feature_shots"},
+      "right": {"kind": "integer", "value": 0}
+    },
+    {
+      "kind": "compare",
+      "operator": ">=",
+      "left": {"kind": "variable", "name": "test_feature_shots"},
       "right": {"kind": "integer", "value": 0}
     },
     {
       "kind": "compare",
       "operator": "<=",
-      "left": {"kind": "variable", "name": "first_bucket"},
+      "left": {
+        "kind": "add",
+        "left": {"kind": "variable", "name": "training_feature_shots"},
+        "right": {"kind": "variable", "name": "test_feature_shots"}
+      },
       "right": {"kind": "variable", "name": "total_shots"}
     }
   ],
@@ -31,7 +41,11 @@
       "operator": "==",
       "left": {
         "kind": "add",
-        "left": {"kind": "variable", "name": "first_bucket"},
+        "left": {
+          "kind": "add",
+          "left": {"kind": "variable", "name": "training_feature_shots"},
+          "right": {"kind": "variable", "name": "test_feature_shots"}
+        },
         "right": {"kind": "result"}
       },
       "right": {"kind": "variable", "name": "total_shots"}

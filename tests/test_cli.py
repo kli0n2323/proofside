@@ -3,7 +3,15 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from proofside.cli import Status, check, classify_nagini, load_target, parse_selector
+from proofside.cli import (
+    CheckResult,
+    Status,
+    check,
+    classify_nagini,
+    load_target,
+    parse_selector,
+    render_output,
+)
 
 
 class SelectorTests(unittest.TestCase):
@@ -90,6 +98,28 @@ class ClassificationTests(unittest.TestCase):
         self.assertIn("executable not found", result.detail)
 
 
+class OutputTests(unittest.TestCase):
+    contract_text = "Assumptions\n- value >= 0\n\nGuarantees\n- result >= 0"
+
+    def test_verified_sidecar_explains_proof_boundary(self) -> None:
+        output = render_output(CheckResult(Status.VERIFIED, "proved", self.contract_text))
+        self.assertIn("Proof boundary", output)
+        self.assertIn("satisfies the displayed guarantees", output)
+        self.assertIn("does not establish scientific validity", output)
+
+    def test_failed_sidecar_does_not_claim_counterexample(self) -> None:
+        output = render_output(CheckResult(Status.FAILED, "Postcondition might not hold.", self.contract_text))
+        self.assertIn("Proof boundary", output)
+        self.assertIn("obligations were not established", output)
+        self.assertIn("does not by itself mean that a concrete counterexample was produced", output)
+        self.assertNotIn("satisfies the displayed guarantees", output)
+
+    def test_unsupported_and_error_have_no_proof_boundary(self) -> None:
+        for status in (Status.UNSUPPORTED, Status.ERROR):
+            with self.subTest(status=status):
+                output = render_output(CheckResult(status, "stopped", self.contract_text))
+                self.assertNotIn("Proof boundary", output)
+
+
 if __name__ == "__main__":
     unittest.main()
-
