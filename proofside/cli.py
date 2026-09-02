@@ -233,14 +233,32 @@ def render_output(result: CheckResult) -> str:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(prog="proofside")
+    parser = argparse.ArgumentParser(
+        prog="proofside",
+        description="State the math, review the contract, and verify typed Python.",
+    )
     subparsers = parser.add_subparsers(dest="command", required=True)
-    check_parser = subparsers.add_parser("check", help="verify one contracted top-level function")
+    check_parser = subparsers.add_parser(
+        "check",
+        help="verify one contracted top-level function",
+        description=(
+            "Verify one typed top-level function with a JSON sidecar contract, "
+            "or with handwritten Nagini contracts when --contract is omitted."
+        ),
+    )
     check_parser.add_argument("selector", help="path/to/file.py::function_name")
-    check_parser.add_argument("--contract", type=Path, help="structured JSON sidecar contract")
+    check_parser.add_argument(
+        "--contract",
+        type=Path,
+        help="structured JSON sidecar; omit for handwritten Nagini contracts",
+    )
     check_all_parser = subparsers.add_parser(
         "check-all",
         help="verify Proofside-marked functions using source-adjacent contracts",
+        description=(
+            "Independently verify marked functions with accepted source-adjacent "
+            "contracts. This command does not propose or accept contracts."
+        ),
     )
     check_all_parser.add_argument("targets", nargs="+", type=Path, help="Python files or directories")
     check_all_parser.add_argument(
@@ -251,6 +269,10 @@ def main(argv: list[str] | None = None) -> int:
     propose_parser = subparsers.add_parser(
         "propose",
         help="ask an explicitly selected model for an unverified candidate contract",
+        description=(
+            "Ask an explicitly selected model for one unverified candidate. "
+            "This command never accepts the candidate or runs verification."
+        ),
     )
     propose_parser.add_argument("selector", help="path/to/file.py::function_name")
     propose_parser.add_argument(
@@ -282,9 +304,18 @@ def main(argv: list[str] | None = None) -> int:
     propose_all_parser = subparsers.add_parser(
         "propose-all",
         help="propose candidates with up to one model request per marked function",
+        description=(
+            "Independently propose unverified candidates for marked functions, "
+            "using deterministic source-adjacent paths. Nothing is accepted or verified."
+        ),
     )
     propose_all_parser.add_argument("targets", nargs="+", type=Path, help="Python files or directories")
-    propose_all_parser.add_argument("--model-source", choices=("api", "local"), required=True)
+    propose_all_parser.add_argument(
+        "--model-source",
+        choices=("api", "local"),
+        required=True,
+        help="api sends selected context remotely; local sends it to the chosen local endpoint",
+    )
     propose_all_parser.add_argument("--model", required=True, help="explicit model name")
     propose_all_parser.add_argument("--base-url", help="OpenAI-compatible base URL")
     propose_all_parser.add_argument(
@@ -300,9 +331,17 @@ def main(argv: list[str] | None = None) -> int:
     accept_parser = subparsers.add_parser(
         "accept",
         help="explicitly accept a candidate contract for later verification",
+        description=(
+            "Validate a candidate and record it as accepted for verification. "
+            "Acceptance does not assert correctness or run verification."
+        ),
     )
     accept_parser.add_argument("selector", help="path/to/file.py::function_name")
-    accept_parser.add_argument("--candidate", type=Path, help="candidate JSON path")
+    accept_parser.add_argument(
+        "--candidate",
+        type=Path,
+        help="candidate JSON path; defaults beside the source in .proofside/",
+    )
     accept_parser.add_argument(
         "--replace",
         action="store_true",
@@ -381,3 +420,4 @@ def main(argv: list[str] | None = None) -> int:
         output_path = candidate_contract_path(file_path, function_name)
     print(render_proposal_output(arguments.selector, output_path, contract_text, sources))
     return 0
+

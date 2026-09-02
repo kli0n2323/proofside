@@ -28,7 +28,7 @@ credential or running model:
 python -m unittest discover -s tests -v
 ```
 
-The four slow integration tests invoke Nagini/Viper. On Linux or macOS:
+The five slow integration tests invoke Nagini/Viper. On Linux or macOS:
 
 ```bash
 PROOFSIDE_RUN_NAGINI=1 python -m unittest tests.test_integration -v
@@ -50,8 +50,16 @@ by it. Live model calls are not part of the automated suite.
   classification, console rendering, and argument parsing.
 - `proofside/contracts.py` — the closed contract IR, strict parsing and
   validation, deterministic human/Nagini rendering, and sidecar source creation.
-- `proofside/proposal.py` — optional untrusted model prompting, HTTP transport,
-  structural validation, and exclusive candidate-file creation.
+- `proofside/specification.py` — deterministic Proofside annotation extraction
+  and marked-function discovery.
+- `proofside/proposal.py` — optional specification-source selection, model
+  prompting, secure HTTP transport, validation, and candidate creation.
+- `proofside/artifacts.py` — deterministic source-adjacent candidate and accepted
+  contract paths.
+- `proofside/acceptance.py` — explicit candidate validation and acceptance for
+  later verification.
+- `proofside/batch.py` — shared marked-target discovery and thin independent
+  `propose-all` / `check-all` orchestration.
 - `examples/` — runnable handwritten and sidecar good/bad demonstrations.
 - `tests/` — fast Proofside-owned boundaries and opt-in Nagini integrations.
 
@@ -60,9 +68,15 @@ by it. Live model calls are not part of the automated suite.
 Please preserve these boundaries:
 
 - Nagini/Viper gets the final word on proof success.
+- Declared specification and implementation are distinct; a function body is
+  model context only when the user explicitly selects it.
 - Model proposal never verifies, accepts, or edits a contract automatically.
-- Manually authored sidecars and handwritten Nagini contracts remain first-class.
+- Acceptance records selection for verification but never performs verification.
+- Manual sidecars, handwritten Nagini contracts, and optional model proposals
+  are all supported paths to the same verifier.
 - Model output and sidecar JSON are untrusted until strictly parsed and validated.
+- Batch commands orchestrate independent single-function pipelines; they do not
+  create a batch contract or proof.
 - New contract syntax needs a concrete current use case, not anticipated demand.
 - Extract an abstraction only when current consumers justify it and readability
   improves.
@@ -78,3 +92,4 @@ standard library was insufficient, and its license implications.
 
 Proofside does not currently require a contributor license agreement. The
 project license will be selected before public release.
+
