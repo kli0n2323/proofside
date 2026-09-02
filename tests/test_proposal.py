@@ -4,13 +4,17 @@ import json
 import os
 import tempfile
 import unittest
+from email.message import Message
 from pathlib import Path
 from unittest.mock import patch
+from urllib.request import BaseHandler, build_opener
+from urllib.response import addinfourl
 
 from proofside.cli import main
 from proofside.proposal import (
     API_BASE_URL,
     LOCAL_BASE_URL,
+    NoRedirectHandler,
     ProposalError,
     build_proposal_prompt,
     propose_contract,
@@ -47,6 +51,24 @@ class FakeResponse:
 
     def read(self) -> bytes:
         return self.body
+
+
+class RedirectingHTTPSHandler(BaseHandler):
+    handler_order = 100
+
+    def __init__(self, status: int) -> None:
+        self.status = status
+        self.requests = []
+
+    def https_open(self, request):
+        self.requests.append(request)
+        if len(self.requests) > 1:
+            raise AssertionError("redirect target was contacted")
+        headers = Message()
+        headers["Location"] = "https://attacker.example/steal"
+        response = addinfourl(io.BytesIO(), headers, request.full_url, self.status)
+        response.msg = "Redirect"
+        return response
 
 
 class PromptTests(unittest.TestCase):
@@ -88,7 +110,7 @@ class ConnectionTests(unittest.TestCase):
 
     def test_api_request_has_auth_model_and_prompt(self) -> None:
         endpoint_response = {"choices": [{"message": {"content": "{}"}}]}
-        with patch("proofside.proposal.urlopen", return_value=FakeResponse(endpoint_response)) as mocked:
+        with patch("proofside.proposal._MODEL_OPENER.open", return_value=FakeResponse(endpoint_response)) as mocked:
             self.assertEqual(
                 request_model(API_BASE_URL, "explicit-model", "contract prompt", "secret"),
                 "{}",
@@ -104,7 +126,7 @@ class ConnectionTests(unittest.TestCase):
 
     def test_local_mode_defaults_to_unauthenticated_ollama_url(self) -> None:
         endpoint_response = {"choices": [{"message": {"content": "{}"}}]}
-        with patch("proofside.proposal.urlopen", return_value=FakeResponse(endpoint_response)) as mocked:
+        with patch("proofside.proposal._MODEL_OPENER.open", return_value=FakeResponse(endpoint_response)) as mocked:
             request_model(LOCAL_BASE_URL, "local-model", "prompt", None)
         request = mocked.call_args.args[0]
         self.assertEqual(request.full_url, "http://localhost:11434/v1/chat/completions")
@@ -112,7 +134,7 @@ class ConnectionTests(unittest.TestCase):
 
     def test_local_base_url_can_be_overridden(self) -> None:
         endpoint_response = {"choices": [{"message": {"content": "{}"}}]}
-        with patch("proofside.proposal.urlopen", return_value=FakeResponse(endpoint_response)) as mocked:
+        with patch("proofside.proposal._MODEL_OPENER.open", return_value=FakeResponse(endpoint_response)) as mocked:
             request_model("http://127.0.0.1:9000/v1", "model", "prompt", None)
         self.assertEqual(
             mocked.call_args.args[0].full_url,
@@ -120,9 +142,42 @@ class ConnectionTests(unittest.TestCase):
         )
 
     def test_malformed_endpoint_response_fails_clearly(self) -> None:
-        with patch("proofside.proposal.urlopen", return_value=FakeResponse({"choices": []})):
+        with patch("proofside.proposal._MODEL_OPENER.open", return_value=FakeResponse({"choices": []})):
             with self.assertRaisesRegex(ProposalError, "unexpected response shape"):
                 request_model(LOCAL_BASE_URL, "model", "prompt", None)
+
+    def test_authenticated_redirects_are_rejected_without_second_request(self) -> None:
+        for status in (302, 308):
+            with self.subTest(status=status):
+                handler = RedirectingHTTPSHandler(status)
+                opener = build_opener(handler, NoRedirectHandler())
+                with patch("proofside.proposal._MODEL_OPENER", opener):
+                    with self.assertRaises(ProposalError) as raised:
+                        request_model(
+                            "https://provider.example/v1",
+                            "model",
+                            "prompt",
+                            "provider-secret",
+                        )
+
+                self.assertEqual(len(handler.requests), 1)
+                request = handler.requests[0]
+                self.assertEqual(
+                    request.full_url,
+                    "https://provider.example/v1/chat/completions",
+                )
+                self.assertEqual(
+                    request.get_header("Authorization"),
+                    "Bearer provider-secret",
+                )
+                error_text = str(raised.exception)
+                self.assertIn(f"HTTP redirect {status}", error_text)
+                self.assertIn("redirects are not followed", error_text)
+                self.assertNotIn(
+                    "https://attacker.example/steal",
+                    [item.full_url for item in handler.requests],
+                )
+                self.assertNotIn("provider-secret", error_text)
 
 
 class ProposalTests(unittest.TestCase):
@@ -265,7 +320,7 @@ class ProposalTests(unittest.TestCase):
             output_path = Path(directory, "candidate.json")
             with (
                 patch.dict(os.environ, {"OPENAI_API_KEY": "api-secret"}, clear=True),
-                patch("proofside.proposal.urlopen", return_value=FakeResponse(endpoint_response)) as mocked,
+                patch("proofside.proposal._MODEL_OPENER.open", return_value=FakeResponse(endpoint_response)) as mocked,
                 patch("proofside.cli.run_nagini") as run_nagini,
                 patch("sys.stdout", new_callable=io.StringIO) as stdout,
             ):
@@ -325,9 +380,9 @@ class ProposalTests(unittest.TestCase):
                     clear=True,
                 ),
                 patch(
-                    "proofside.proposal.urlopen",
+                    "proofside.proposal._MODEL_OPENER.open",
                     return_value=FakeResponse(endpoint_response),
-                ) as urlopen,
+                ) as open_request,
                 patch("sys.stdout", new_callable=io.StringIO),
             ):
                 exit_code = main(
@@ -346,10 +401,10 @@ class ProposalTests(unittest.TestCase):
                         "OTHER_PROVIDER_KEY",
                     ]
                 )
-            request = urlopen.call_args.args[0]
+            request = open_request.call_args.args[0]
             self.assertEqual(request.full_url, "https://other.example/v1/chat/completions")
             self.assertEqual(request.get_header("Authorization"), "Bearer provider-secret")
-            self.assertNotIn("openai-secret", repr(urlopen.call_args))
+            self.assertNotIn("openai-secret", repr(open_request.call_args))
             self.assertEqual(exit_code, 0)
 
     def test_missing_custom_key_fails_before_network(self) -> None:

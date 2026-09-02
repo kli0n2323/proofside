@@ -6,7 +6,7 @@ import os
 from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlparse
-from urllib.request import Request, urlopen
+from urllib.request import HTTPRedirectHandler, Request, build_opener
 
 from .cli import CheckResult, _function_arguments, load_target, parse_selector
 from .contracts import (
@@ -21,10 +21,19 @@ from .contracts import (
 API_BASE_URL = "https://api.openai.com/v1"
 LOCAL_BASE_URL = "http://localhost:11434/v1"
 REQUEST_TIMEOUT_SECONDS = 60
+REDIRECT_STATUS_CODES = {301, 302, 303, 307, 308}
 
 
 class ProposalError(ValueError):
     pass
+
+
+class NoRedirectHandler(HTTPRedirectHandler):
+    def redirect_request(self, request, file, code, message, headers, new_url):
+        return None
+
+
+_MODEL_OPENER = build_opener(NoRedirectHandler())
 
 
 def build_proposal_prompt(source: str, function: ast.FunctionDef) -> str:
@@ -83,9 +92,14 @@ def request_model(base_url: str, model: str, prompt: str, api_key: str | None) -
     )
 
     try:
-        with urlopen(request, timeout=REQUEST_TIMEOUT_SECONDS) as response:
+        with _MODEL_OPENER.open(request, timeout=REQUEST_TIMEOUT_SECONDS) as response:
             response_text = response.read().decode("utf-8")
     except HTTPError as error:
+        if error.code in REDIRECT_STATUS_CODES:
+            raise ProposalError(
+                f"model endpoint returned HTTP redirect {error.code}; "
+                "redirects are not followed for credential safety"
+            ) from error
         raise ProposalError(f"model endpoint returned HTTP {error.code}: {error.reason}") from error
     except (URLError, OSError) as error:
         reason = getattr(error, "reason", error)
