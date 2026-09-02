@@ -104,4 +104,3 @@ def extract_specification_annotations(source: str) -> tuple[AnnotatedFunction, .
 
 def find_annotated_functions(file_path: Path) -> tuple[AnnotatedFunction, ...]:
     return extract_specification_annotations(file_path.read_text(encoding="utf-8"))
-

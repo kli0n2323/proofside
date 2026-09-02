@@ -278,4 +278,3 @@ def render_proposal_output(
         "To verify explicitly:\n"
         f"python -m proofside check {selector} --contract {output_path}"
     )
-
