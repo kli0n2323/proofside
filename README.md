@@ -1,13 +1,14 @@
 # Proofside
 
-Proofside is a small, non-LLM formal-verification tool for typed mathematical
-Python. A researcher writes an explicit structured sidecar contract, reviews it,
-and asks Proofside to check a selected function. Nagini/Viper performs the actual
-verification; Proofside provides the strict contract boundary, deterministic
-lowering, result classification, and console explanation.
+Proofside is a small formal-verification tool for typed mathematical Python. A
+researcher can write an explicit structured sidecar contract and ask Proofside to
+check a selected function without using any model. Nagini/Viper performs the
+actual verification; Proofside provides the strict contract boundary,
+deterministic lowering, result classification, and console explanation.
 
-This repository is the Milestone 3 proof of concept. There is no contract
-generation or model integration.
+Milestone 4 adds an optional command that asks an explicitly selected API or
+local model to propose an untrusted candidate contract. It never verifies or
+accepts the proposal automatically.
 
 ## Install and run
 
@@ -27,6 +28,29 @@ Verify the original sidecar examples:
 python -m proofside check examples/shot_budget_plain.py::allocate_remaining --contract examples/shot_budget_contract.json
 python -m proofside check examples/shot_budget_plain_bad.py::allocate_remaining --contract examples/shot_budget_contract.json
 ```
+
+Optionally propose a candidate using an API endpoint:
+
+```bash
+# Sends only the selected function and contract-format instructions remotely.
+# OPENAI_API_KEY is read from the environment.
+python -m proofside propose examples/shot_budget_plain.py::allocate_remaining --model-source api --model MODEL_NAME --out candidate_contract.json
+```
+
+Or use a local OpenAI-compatible endpoint, defaulting to Ollama at
+`http://localhost:11434/v1`:
+
+```bash
+python -m proofside propose examples/shot_budget_plain.py::allocate_remaining --model-source local --model MODEL_NAME --out candidate_contract.json
+```
+
+Use `--base-url` to override either endpoint. `propose` sends only the selected
+function source, its signature, and the supported contract-format instructions.
+The model response is untrusted: it must pass the same strict parser and
+structural validator as a manual sidecar. A successful proposal is labeled
+`NOT VERIFIED`, saved only after validation, and never sent to Nagini. Review or
+edit it, then run a separate explicit `proofside check ... --contract ...` if you
+choose to submit it for verification. Existing files are not overwritten.
 
 The advanced, low-level handwritten-Nagini path remains available:
 
@@ -124,10 +148,8 @@ Formal verification establishes that an implementation satisfies a stated
 specification under its assumptions. It does not establish that the specification
 is scientifically meaningful or that a scientific model corresponds to reality.
 
-Future versions may optionally help propose structured contracts using either
-API-backed or local models. Model use will not be required for verification, and
-proposed contracts will still pass through the same explicit, human-reviewable
-IR and deterministic verifier path.
+Model use is never required for verification. Model proposals do not change the
+explicit, human-reviewable IR or the deterministic verifier path.
 
 ## Third-party software
 

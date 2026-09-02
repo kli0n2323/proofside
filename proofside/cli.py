@@ -237,8 +237,43 @@ def main(argv: list[str] | None = None) -> int:
     check_parser = subparsers.add_parser("check", help="verify one contracted top-level function")
     check_parser.add_argument("selector", help="path/to/file.py::function_name")
     check_parser.add_argument("--contract", type=Path, help="structured JSON sidecar contract")
+    propose_parser = subparsers.add_parser(
+        "propose",
+        help="ask an explicitly selected model for an unverified candidate contract",
+    )
+    propose_parser.add_argument("selector", help="path/to/file.py::function_name")
+    propose_parser.add_argument(
+        "--model-source",
+        choices=("api", "local"),
+        required=True,
+        help="api sends selected context remotely; local sends it to the chosen local endpoint",
+    )
+    propose_parser.add_argument("--model", required=True, help="explicit model name")
+    propose_parser.add_argument("--out", type=Path, required=True, help="new candidate JSON path")
+    propose_parser.add_argument(
+        "--base-url",
+        help="OpenAI-compatible base URL; API is remote and local defaults to localhost",
+    )
     arguments = parser.parse_args(argv)
 
-    result = check(arguments.selector, arguments.contract)
-    print(render_output(result))
-    return 0 if result.status is Status.VERIFIED else 1
+    if arguments.command == "check":
+        result = check(arguments.selector, arguments.contract)
+        print(render_output(result))
+        return 0 if result.status is Status.VERIFIED else 1
+
+    from .proposal import ProposalError, propose_contract, render_proposal_output
+
+    try:
+        contract_text = propose_contract(
+            arguments.selector,
+            arguments.model_source,
+            arguments.model,
+            arguments.out,
+            arguments.base_url,
+        )
+    except ProposalError as error:
+        print("PROPOSAL REJECTED")
+        print(error)
+        return 1
+    print(render_proposal_output(arguments.selector, arguments.out, contract_text))
+    return 0
