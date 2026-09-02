@@ -28,6 +28,7 @@ class ProposalError(ValueError):
     pass
 
 
+# Refuse redirects so bearer credentials cannot leave the selected endpoint.
 class NoRedirectHandler(HTTPRedirectHandler):
     def redirect_request(self, request, file, code, message, headers, new_url):
         return None

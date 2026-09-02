@@ -1,5 +1,12 @@
 /.venv/
-/.mypy_cache_strict/
+/venv/
 __pycache__/
-
-
+*.py[cod]
+*.egg-info/
+/build/
+/dist/
+.pytest_cache/
+.mypy_cache/
+.mypy_cache_strict/
+.env
+.env.*
