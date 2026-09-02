@@ -197,3 +197,4 @@ def build_annotated_source(source: str, function: ast.FunctionDef, contract: Con
     function_lines[insertion_index:insertion_index] = contract_lines + [""]
     contract_import = "from nagini_contracts.contracts import Ensures, Requires, Result\n\n\n"
     return contract_import + "\n".join(function_lines) + "\n"
+

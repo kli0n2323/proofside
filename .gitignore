@@ -1,0 +1,5 @@
+/.venv/
+/.mypy_cache_strict/
+__pycache__/
+
+
