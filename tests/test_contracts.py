@@ -271,7 +271,7 @@ class ExpandedContractTests(unittest.TestCase):
             render_human(contract),
             "Assumptions\n\nGuarantees\n"
             "- (x >= 0 and y >= 0) -> result == 2 * x - y\n"
-            "- (result == x or result == y)\n"
+            "- result == x or result == y\n"
             "- not (result != -(x + y))",
         )
         self.assertEqual(
@@ -289,6 +289,95 @@ class ExpandedContractTests(unittest.TestCase):
             contract = load_contract(path)
             validate_contract(contract, parameters)
             self.assertTrue(all(isinstance(formula, Comparison) for formula in contract.requires + contract.ensures))
+
+
+class HumanFormulaGroupingTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.a = compare(">=", variable("x"), integer(0))
+        self.b = compare("==", {"kind": "result"}, variable("x"))
+        self.c = compare("==", {"kind": "result"}, integer(0))
+
+    def rendered(self, formula: object) -> str:
+        contract = parse_contract({"requires": [], "ensures": [formula]})
+        return render_human(contract).splitlines()[-1].removeprefix("- ")
+
+    def test_simple_atomic_implication_stays_concise(self) -> None:
+        formula = {"kind": "implies", "if": self.a, "then": self.b}
+        self.assertEqual(self.rendered(formula), "x >= 0 -> result == x")
+
+    def test_implication_inside_and_and_or_is_grouped(self) -> None:
+        implication = {"kind": "implies", "if": self.a, "then": self.b}
+        self.assertEqual(
+            self.rendered({"kind": "and", "items": [implication, self.c]}),
+            "(x >= 0 -> result == x) and result == 0",
+        )
+        self.assertEqual(
+            self.rendered({"kind": "or", "items": [implication, self.c]}),
+            "(x >= 0 -> result == x) or result == 0",
+        )
+
+    def test_composite_implication_operands_are_grouped(self) -> None:
+        antecedent = {"kind": "and", "items": [self.a, compare(">=", variable("y"), integer(0))]}
+        consequent = {"kind": "or", "items": [self.b, self.c]}
+        self.assertEqual(
+            self.rendered({"kind": "implies", "if": antecedent, "then": self.c}),
+            "(x >= 0 and y >= 0) -> result == 0",
+        )
+        self.assertEqual(
+            self.rendered({"kind": "implies", "if": self.a, "then": consequent}),
+            "x >= 0 -> (result == x or result == 0)",
+        )
+
+    def test_nested_implication_association_is_explicit(self) -> None:
+        inner = {"kind": "implies", "if": self.a, "then": self.b}
+        self.assertEqual(
+            self.rendered({"kind": "implies", "if": inner, "then": self.c}),
+            "(x >= 0 -> result == x) -> result == 0",
+        )
+        self.assertEqual(
+            self.rendered({"kind": "implies", "if": self.a, "then": {"kind": "implies", "if": self.b, "then": self.c}}),
+            "x >= 0 -> (result == x -> result == 0)",
+        )
+
+    def test_mixed_and_or_and_not_preserve_structure(self) -> None:
+        disjunction = {"kind": "or", "items": [self.b, self.c]}
+        conjunction = {"kind": "and", "items": [self.b, self.c]}
+        self.assertEqual(
+            self.rendered({"kind": "and", "items": [self.a, disjunction]}),
+            "x >= 0 and (result == x or result == 0)",
+        )
+        self.assertEqual(
+            self.rendered({"kind": "or", "items": [self.a, conjunction]}),
+            "x >= 0 or (result == x and result == 0)",
+        )
+        self.assertEqual(
+            self.rendered({"kind": "not", "item": disjunction}),
+            "not (result == x or result == 0)",
+        )
+
+    def test_nagini_nested_formula_rendering_is_unchanged(self) -> None:
+        implication = {"kind": "implies", "if": self.a, "then": self.b}
+        formula = {"kind": "and", "items": [implication, {"kind": "not", "item": self.c}]}
+        contract = parse_contract({"requires": [], "ensures": [formula]})
+        self.assertEqual(
+            render_nagini(contract),
+            "Ensures((Implies(x >= 0, Result() == x) and not (Result() == 0)))",
+        )
+
+    def test_arithmetic_grouping_is_unchanged(self) -> None:
+        nested_subtract = {
+            "kind": "subtract",
+            "left": variable("x"),
+            "right": {
+                "kind": "subtract",
+                "left": variable("y"),
+                "right": variable("z"),
+            },
+        }
+        self.assertEqual(
+            self.rendered(compare("==", {"kind": "result"}, nested_subtract)),
+            "result == x - (y - z)",
+        )
 
 
 if __name__ == "__main__":

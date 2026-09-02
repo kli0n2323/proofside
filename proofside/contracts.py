@@ -285,43 +285,66 @@ def _render_value(value: Value, result_text: str, parent_precedence: int = 0) ->
     return f"({text})" if precedence < parent_precedence else text
 
 
-def _render_formula(formula: Formula, result_text: str, nagini: bool = False) -> str:
+def _render_human_formula(formula: Formula, result_text: str) -> str:
     if isinstance(formula, Comparison):
         left = _render_value(formula.left, result_text)
         return f"{left} {formula.operator.value} {_render_value(formula.right, result_text)}"
-    if isinstance(formula, And):
-        items = " and ".join(
-            _render_formula(item, result_text, nagini) for item in formula.items
+    if isinstance(formula, (And, Or)):
+        operator = " and " if isinstance(formula, And) else " or "
+        return operator.join(
+            _render_human_child(item, result_text) for item in formula.items
         )
-        return f"({items})"
-    if isinstance(formula, Or):
-        items = " or ".join(
-            _render_formula(item, result_text, nagini) for item in formula.items
+    if isinstance(formula, Not):
+        return f"not ({_render_human_formula(formula.item, result_text)})"
+    if isinstance(formula, Implies):
+        antecedent = _render_human_child(formula.antecedent, result_text)
+        consequent = _render_human_child(formula.consequent, result_text)
+        return f"{antecedent} -> {consequent}"
+    raise ContractError(f"unsupported contract formula: {type(formula).__name__}")
+
+
+def _render_human_child(formula: Formula, result_text: str) -> str:
+    text = _render_human_formula(formula, result_text)
+    return text if isinstance(formula, Comparison) else f"({text})"
+
+
+def _render_nagini_formula(formula: Formula, result_text: str) -> str:
+    if isinstance(formula, Comparison):
+        left = _render_value(formula.left, result_text)
+        return f"{left} {formula.operator.value} {_render_value(formula.right, result_text)}"
+    if isinstance(formula, (And, Or)):
+        operator = " and " if isinstance(formula, And) else " or "
+        items = operator.join(
+            _render_nagini_formula(item, result_text) for item in formula.items
         )
         return f"({items})"
     if isinstance(formula, Not):
-        return f"not ({_render_formula(formula.item, result_text, nagini)})"
+        return f"not ({_render_nagini_formula(formula.item, result_text)})"
     if isinstance(formula, Implies):
-        antecedent = _render_formula(formula.antecedent, result_text, nagini)
-        consequent = _render_formula(formula.consequent, result_text, nagini)
-        if nagini:
-            return f"Implies({antecedent}, {consequent})"
-        return f"{antecedent} -> {consequent}"
+        antecedent = _render_nagini_formula(formula.antecedent, result_text)
+        consequent = _render_nagini_formula(formula.consequent, result_text)
+        return f"Implies({antecedent}, {consequent})"
     raise ContractError(f"unsupported contract formula: {type(formula).__name__}")
 
 
 def render_human(contract: Contract) -> str:
     lines = ["Assumptions"]
-    lines.extend(f"- {_render_formula(item, 'result')}" for item in contract.requires)
+    lines.extend(f"- {_render_human_formula(item, 'result')}" for item in contract.requires)
     lines.append("")
     lines.append("Guarantees")
-    lines.extend(f"- {_render_formula(item, 'result')}" for item in contract.ensures)
+    lines.extend(f"- {_render_human_formula(item, 'result')}" for item in contract.ensures)
     return "\n".join(lines)
 
 
 def render_nagini(contract: Contract) -> str:
-    lines = [f"Requires({_render_formula(item, 'Result()', True)})" for item in contract.requires]
-    lines.extend(f"Ensures({_render_formula(item, 'Result()', True)})" for item in contract.ensures)
+    lines = [
+        f"Requires({_render_nagini_formula(item, 'Result()')})"
+        for item in contract.requires
+    ]
+    lines.extend(
+        f"Ensures({_render_nagini_formula(item, 'Result()')})"
+        for item in contract.ensures
+    )
     return "\n".join(lines)
 
 
