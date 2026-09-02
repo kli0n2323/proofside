@@ -186,6 +186,27 @@ Such results are labeled `UNREVIEWED CONTRACT`, and the overall exit remains
 nonzero even if every candidate-backed proof verifies. `check-all` requires no
 model, API key, or proposal configuration.
 
+## Batch proposal
+
+`propose-all` uses the same deterministic marked-function discovery as
+`check-all` and creates one independent source-adjacent candidate per function:
+
+```bash
+proofside propose-all research/ \
+  --model-source api \
+  --model MODEL
+```
+
+Only marked functions participate. Each function's equation and intent are the
+default specification sources, and its implementation body remains withheld
+unless `--source implementation` is explicitly selected. The command may make
+one sequential model request per marked function that needs a new candidate.
+
+Existing candidates are not overwritten, and accepted contracts do not prevent
+new candidate proposals. Nothing is accepted or verified automatically: review
+or edit the resulting `.candidate.json` files, run explicit `accept` commands,
+then use ordinary `check-all`.
+
 ## Supported contract language
 
 The intentionally small closed language contains:

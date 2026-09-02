@@ -279,6 +279,24 @@ def main(argv: list[str] | None = None) -> int:
         choices=("equation", "intent", "implementation"),
         help="repeatable specification source; defaults to available equation/intent annotations",
     )
+    propose_all_parser = subparsers.add_parser(
+        "propose-all",
+        help="propose candidates with up to one model request per marked function",
+    )
+    propose_all_parser.add_argument("targets", nargs="+", type=Path, help="Python files or directories")
+    propose_all_parser.add_argument("--model-source", choices=("api", "local"), required=True)
+    propose_all_parser.add_argument("--model", required=True, help="explicit model name")
+    propose_all_parser.add_argument("--base-url", help="OpenAI-compatible base URL")
+    propose_all_parser.add_argument(
+        "--api-key-env",
+        help="credential environment-variable name required for a custom API base URL",
+    )
+    propose_all_parser.add_argument(
+        "--source",
+        action="append",
+        choices=("equation", "intent", "implementation"),
+        help="repeatable specification source; defaults per function to equation/intent annotations",
+    )
     accept_parser = subparsers.add_parser(
         "accept",
         help="explicitly accept a candidate contract for later verification",
@@ -306,6 +324,24 @@ def main(argv: list[str] | None = None) -> int:
         )
         print(render_batch_output(results, discovery_errors))
         return 0 if batch_succeeded(results, discovery_errors) else 1
+
+    if arguments.command == "propose-all":
+        from .batch import (
+            batch_proposal_succeeded,
+            render_batch_proposal_output,
+            run_batch_proposals,
+        )
+
+        results, discovery_errors = run_batch_proposals(
+            tuple(arguments.targets),
+            arguments.model_source,
+            arguments.model,
+            arguments.base_url,
+            arguments.api_key_env,
+            tuple(arguments.source) if arguments.source else None,
+        )
+        print(render_batch_proposal_output(results, discovery_errors))
+        return 0 if batch_proposal_succeeded(results, discovery_errors) else 1
 
     if arguments.command == "accept":
         from .acceptance import AcceptanceError, accept_contract, render_acceptance_output
