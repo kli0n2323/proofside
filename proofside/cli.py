@@ -258,6 +258,12 @@ def main(argv: list[str] | None = None) -> int:
         "--api-key-env",
         help="credential environment-variable name required for a custom API base URL",
     )
+    propose_parser.add_argument(
+        "--source",
+        action="append",
+        choices=("equation", "intent", "implementation"),
+        help="repeatable specification source; defaults to available equation/intent annotations",
+    )
     arguments = parser.parse_args(argv)
 
     if arguments.command == "check":
@@ -268,17 +274,18 @@ def main(argv: list[str] | None = None) -> int:
     from .proposal import ProposalError, propose_contract, render_proposal_output
 
     try:
-        contract_text = propose_contract(
+        contract_text, sources = propose_contract(
             arguments.selector,
             arguments.model_source,
             arguments.model,
             arguments.out,
             arguments.base_url,
             arguments.api_key_env,
+            tuple(arguments.source) if arguments.source else None,
         )
     except ProposalError as error:
         print("PROPOSAL REJECTED")
         print(error)
         return 1
-    print(render_proposal_output(arguments.selector, arguments.out, contract_text))
+    print(render_proposal_output(arguments.selector, arguments.out, contract_text, sources))
     return 0

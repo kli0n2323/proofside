@@ -20,6 +20,7 @@ from proofside.proposal import (
     propose_contract,
     render_proposal_output,
     request_model,
+    select_specification_sources,
 )
 
 
@@ -27,11 +28,21 @@ VALID_CONTRACT = json.loads(
     Path("examples/shot_budget_contract.json").read_text(encoding="utf-8")
 )
 
+ANNOTATED_SOURCE = (
+    "# proofside equation: result = total_shots - first_bucket\n"
+    "# proofside intent: Return the unallocated portion of the declared budget.\n"
+    "def allocate(total_shots: int, first_bucket: int) -> int:\n"
+    "    secret_implementation_sentinel = total_shots - first_bucket + 999\n"
+    "    return secret_implementation_sentinel\n"
+)
+
 
 def write_target(directory: str, source: str | None = None) -> Path:
     path = Path(directory, "target.py")
     if source is None:
         source = (
+            "# proofside equation: result = total_shots - first_bucket\n"
+            "# proofside intent: Return the unallocated shot count.\n"
             "def allocate(total_shots: int, first_bucket: int) -> int:\n"
             "    return total_shots - first_bucket\n"
         )
@@ -80,7 +91,12 @@ class PromptTests(unittest.TestCase):
             "    return 'UNRELATED_SECRET'\n"
         )
         function = ast.parse(source).body[0]
-        prompt = build_proposal_prompt(source, function)
+        sections = select_specification_sources(
+            source,
+            function,
+            ("implementation",),
+        )
+        prompt = build_proposal_prompt(function, sections)
 
         self.assertIn("allocate", prompt)
         self.assertIn("total_shots: int", prompt)
@@ -180,6 +196,200 @@ class ConnectionTests(unittest.TestCase):
                 self.assertNotIn("provider-secret", error_text)
 
 
+class SourceSelectionTests(unittest.TestCase):
+    def capture_prompt(
+        self,
+        source: str,
+        sources: tuple[str, ...] | None = None,
+    ) -> tuple[str, tuple[str, ...]]:
+        captured = {}
+
+        def respond(_url, _model, prompt, _key):
+            captured["prompt"] = prompt
+            return json.dumps(VALID_CONTRACT)
+
+        with tempfile.TemporaryDirectory() as directory:
+            source_path = write_target(directory, source)
+            with patch("proofside.proposal.request_model", side_effect=respond):
+                _contract_text, used_sources = propose_contract(
+                    f"{source_path}::allocate",
+                    "local",
+                    "test-model",
+                    Path(directory, "candidate.json"),
+                    sources=sources,
+                )
+        return captured["prompt"], used_sources
+
+    def test_default_uses_available_annotations_in_fixed_order(self) -> None:
+        cases = {
+            "both": (ANNOTATED_SOURCE, ("equation", "intent")),
+            "equation": (
+                ANNOTATED_SOURCE.replace(
+                    "# proofside intent: Return the unallocated portion of the declared budget.\n",
+                    "",
+                ),
+                ("equation",),
+            ),
+            "intent": (
+                ANNOTATED_SOURCE.replace(
+                    "# proofside equation: result = total_shots - first_bucket\n",
+                    "",
+                ),
+                ("intent",),
+            ),
+        }
+        for name, (source, expected) in cases.items():
+            with self.subTest(name=name):
+                prompt, used_sources = self.capture_prompt(source)
+                self.assertEqual(used_sources, expected)
+                self.assertEqual("[EQUATION]" in prompt, "equation" in expected)
+                self.assertEqual("[INTENT]" in prompt, "intent" in expected)
+                self.assertNotIn("secret_implementation_sentinel", prompt)
+
+    def test_unannotated_default_fails_before_network(self) -> None:
+        source = (
+            "def allocate(total_shots: int, first_bucket: int) -> int:\n"
+            "    return total_shots - first_bucket\n"
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            source_path = write_target(directory, source)
+            with patch("proofside.proposal.request_model") as request_model:
+                with self.assertRaisesRegex(
+                    ProposalError,
+                    "add equation/intent annotations or explicitly use --source implementation",
+                ):
+                    propose_contract(
+                        f"{source_path}::allocate",
+                        "local",
+                        "model",
+                        Path(directory, "candidate.json"),
+                    )
+            request_model.assert_not_called()
+
+    def test_explicit_implementation_preserves_unannotated_proposal(self) -> None:
+        source = (
+            "def allocate(total_shots: int, first_bucket: int) -> int:\n"
+            "    implementation_only_sentinel = total_shots - first_bucket\n"
+            "    return implementation_only_sentinel\n"
+        )
+        prompt, used_sources = self.capture_prompt(source, ("implementation",))
+
+        self.assertEqual(used_sources, ("implementation",))
+        self.assertIn("[IMPLEMENTATION]", prompt)
+        self.assertIn("implementation_only_sentinel", prompt)
+
+    def test_explicit_annotation_sources_exclude_unselected_material(self) -> None:
+        cases = {
+            ("equation",): (True, False),
+            ("intent",): (False, True),
+            ("equation", "intent"): (True, True),
+        }
+        for sources, (has_equation, has_intent) in cases.items():
+            with self.subTest(sources=sources):
+                prompt, used_sources = self.capture_prompt(ANNOTATED_SOURCE, sources)
+                self.assertEqual(used_sources, sources)
+                self.assertEqual("[EQUATION]" in prompt, has_equation)
+                self.assertEqual("[INTENT]" in prompt, has_intent)
+                self.assertNotIn("\n[IMPLEMENTATION]\n", prompt)
+                self.assertEqual(
+                    "result = total_shots - first_bucket" in prompt,
+                    has_equation,
+                )
+                self.assertEqual(
+                    "Return the unallocated portion of the declared budget." in prompt,
+                    has_intent,
+                )
+                self.assertNotIn("secret_implementation_sentinel", prompt)
+
+    def test_implementation_can_be_combined_with_annotations(self) -> None:
+        for sources in (
+            ("equation", "implementation"),
+            ("equation", "intent", "implementation"),
+        ):
+            with self.subTest(sources=sources):
+                prompt, used_sources = self.capture_prompt(ANNOTATED_SOURCE, sources)
+                self.assertEqual(used_sources, sources)
+                self.assertIn("[EQUATION]", prompt)
+                self.assertEqual("[INTENT]" in prompt, "intent" in sources)
+                self.assertIn("[IMPLEMENTATION]", prompt)
+                self.assertIn("secret_implementation_sentinel", prompt)
+
+    def test_missing_requested_annotation_fails_before_network(self) -> None:
+        cases = {
+            "equation": ANNOTATED_SOURCE.replace(
+                "# proofside equation: result = total_shots - first_bucket\n",
+                "",
+            ),
+            "intent": ANNOTATED_SOURCE.replace(
+                "# proofside intent: Return the unallocated portion of the declared budget.\n",
+                "",
+            ),
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            for requested, source in cases.items():
+                with self.subTest(requested=requested):
+                    source_path = write_target(directory, source)
+                    with patch("proofside.proposal.request_model") as request_model:
+                        with self.assertRaisesRegex(
+                            ProposalError,
+                            f"requested specification source '{requested}' is not available",
+                        ):
+                            propose_contract(
+                                f"{source_path}::allocate",
+                                "local",
+                                "model",
+                                Path(directory, f"{requested}.json"),
+                                sources=(requested,),
+                            )
+                    request_model.assert_not_called()
+
+    def test_default_prompt_withholds_body_but_keeps_structural_signature(self) -> None:
+        prompt, used_sources = self.capture_prompt(ANNOTATED_SOURCE)
+
+        self.assertEqual(used_sources, ("equation", "intent"))
+        self.assertIn("result = total_shots - first_bucket", prompt)
+        self.assertIn("Return the unallocated portion of the declared budget.", prompt)
+        self.assertIn(
+            "def allocate(total_shots: int, first_bucket: int) -> int",
+            prompt,
+        )
+        self.assertNotIn("secret_implementation_sentinel", prompt)
+        self.assertNotIn("+ 999", prompt)
+
+    def test_cli_deduplicates_repeatable_source_flags(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            source_path = write_target(directory, ANNOTATED_SOURCE)
+            output_path = Path(directory, "candidate.json")
+            with (
+                patch(
+                    "proofside.proposal.request_model",
+                    return_value=json.dumps(VALID_CONTRACT),
+                ) as request_model,
+                patch("sys.stdout", new_callable=io.StringIO) as stdout,
+            ):
+                exit_code = main(
+                    [
+                        "propose",
+                        f"{source_path}::allocate",
+                        "--model-source",
+                        "local",
+                        "--model",
+                        "model",
+                        "--out",
+                        str(output_path),
+                        "--source",
+                        "equation",
+                        "--source",
+                        "equation",
+                    ]
+                )
+
+        prompt = request_model.call_args.args[2]
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(prompt.count("[EQUATION]"), 1)
+        self.assertIn("Specification sources: equation", stdout.getvalue())
+
+
 class ProposalTests(unittest.TestCase):
     def test_valid_proposal_is_saved_rendered_and_never_verified(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -191,7 +401,7 @@ class ProposalTests(unittest.TestCase):
                 patch("proofside.proposal.request_model", return_value=json.dumps(VALID_CONTRACT)),
                 patch("proofside.cli.run_nagini") as run_nagini,
             ):
-                contract_text = propose_contract(
+                contract_text, sources = propose_contract(
                     selector,
                     "local",
                     "test-model",
@@ -203,7 +413,7 @@ class ProposalTests(unittest.TestCase):
             self.assertEqual(json.loads(output_path.read_text(encoding="utf-8")), VALID_CONTRACT)
             self.assertIn("Assumptions", contract_text)
             self.assertIn("first_bucket + result == total_shots", contract_text)
-            output = render_proposal_output(selector, output_path, contract_text)
+            output = render_proposal_output(selector, output_path, contract_text, sources)
             self.assertIn("PROPOSED — NOT VERIFIED", output)
             self.assertIn("structural validation only", output)
             self.assertIn("Human review", output)
@@ -234,6 +444,7 @@ class ProposalTests(unittest.TestCase):
                     "local",
                     "test-model",
                     Path(directory, "candidate.json"),
+                    sources=("implementation",),
                 )
             self.assertEqual(captured["url"], LOCAL_BASE_URL)
             self.assertIsNone(captured["key"])

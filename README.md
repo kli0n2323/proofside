@@ -100,12 +100,24 @@ Proofside does not parse handwritten Nagini annotations into its contract IR.
 
 ## Optional model proposal
 
-`propose` sends the selected function and the supported contract-format
-instructions to an explicitly selected model. A successful response is strictly
+`propose` sends user-selected specification context and the supported
+contract-format instructions to an explicitly selected model. By default it
+uses available annotations immediately above the function:
+
+```python
+# proofside equation: result = total_shots - first_bucket
+# proofside intent: Return the unallocated portion of the declared budget.
+def allocate_remaining(total_shots: int, first_bucket: int) -> int:
+    return total_shots - first_bucket
+```
+
+The signature remains structural context, but the implementation body is not
+sent unless `--source implementation` is explicitly selected. An unannotated
+function therefore requires that option. A successful response is strictly
 parsed, structurally validated, saved, and labeled `PROPOSED — NOT VERIFIED`:
 
 ```bash
-proofside propose examples/shot_budget_plain.py::allocate_remaining \
+proofside propose examples/shot_budget_annotated.py::allocate_remaining \
   --model-source api --model MODEL_NAME --out candidate_contract.json
 ```
 
@@ -113,7 +125,7 @@ Review or edit the candidate, then choose it for verification with a separate
 command:
 
 ```bash
-proofside check examples/shot_budget_plain.py::allocate_remaining \
+proofside check examples/shot_budget_annotated.py::allocate_remaining \
   --contract candidate_contract.json
 ```
 
