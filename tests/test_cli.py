@@ -100,6 +100,47 @@ class ClassificationTests(unittest.TestCase):
         self.assertEqual(result.status, Status.ERROR)
         self.assertIn("executable not found", result.detail)
 
+    def test_noninteractive_jvm_failure_does_not_download_lean(self) -> None:
+        unavailable = CheckResult(Status.ERROR, "JVM DLL not found")
+
+        class NonInteractiveInput:
+            def isatty(self):
+                return False
+
+        with patch("proofside.cli.run_nagini", return_value=unavailable), patch(
+            "proofside.cli.sys.stdin", NonInteractiveInput()
+        ), patch("proofside.cli.install_lean") as install:
+            result = check(
+                "examples/sidecar/shot_budget_plain.py::allocate_remaining",
+                Path("examples/sidecar/shot_budget_contract.json"),
+            )
+
+        self.assertEqual(result.status, Status.ERROR)
+        self.assertIn("Lean fallback is available", result.detail)
+        install.assert_not_called()
+
+    def test_interactive_jvm_failure_installs_then_runs_lean(self) -> None:
+        unavailable = CheckResult(Status.ERROR, "JVM DLL not found")
+        verified = CheckResult(Status.VERIFIED, "Lean proved it")
+
+        class InteractiveInput:
+            def isatty(self):
+                return True
+
+        with patch("proofside.cli.run_nagini", return_value=unavailable), patch(
+            "proofside.cli.sys.stdin", InteractiveInput()
+        ), patch("builtins.input", return_value="y"), patch(
+            "proofside.cli.install_lean"
+        ) as install, patch("proofside.cli.run_lean", return_value=verified):
+            result = check(
+                "examples/sidecar/shot_budget_plain.py::allocate_remaining",
+                Path("examples/sidecar/shot_budget_contract.json"),
+            )
+
+        self.assertEqual(result.status, Status.VERIFIED)
+        self.assertEqual(result.detail, "Lean proved it")
+        install.assert_called_once_with()
+
 
 class OutputTests(unittest.TestCase):
     contract_text = "Assumptions\n- value >= 0\n\nGuarantees\n- result >= 0"

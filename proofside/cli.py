@@ -4,6 +4,7 @@ import argparse
 import ast
 import shutil
 import subprocess
+import sys
 import tempfile
 from dataclasses import dataclass
 from enum import Enum
@@ -17,7 +18,7 @@ from .contracts import (
     render_human,
     validate_contract,
 )
-from .lean import LeanTranslationError, build_lean_source
+from .lean import LeanTranslationError, build_lean_source, install_lean, lean_command
 
 
 class Status(str, Enum):
@@ -164,11 +165,8 @@ def run_nagini(file_path: Path, function_name: str) -> CheckResult:
 
 def run_lean(function: ast.FunctionDef, contract) -> CheckResult:
     """Prove the supported Python subset by lowering it to a Lean theorem."""
-    lean = shutil.which("lean")
-    if not lean:
-        candidate = Path.home() / ".elan" / "bin" / "lean"
-        lean = str(candidate) if candidate.is_file() else None
-    if not lean:
+    command = lean_command()
+    if not command:
         return CheckResult(Status.ERROR, "Lean executable not found; install Lean 4 with elan")
 
     try:
@@ -181,7 +179,7 @@ def run_lean(function: ast.FunctionDef, contract) -> CheckResult:
             proof_path = Path(directory, f"{function.name}.lean")
             proof_path.write_text(source, encoding="utf-8")
             completed = subprocess.run(
-                [lean, str(proof_path)], capture_output=True, text=True, check=False
+                [*command, str(proof_path)], capture_output=True, text=True, check=False
             )
     except OSError as error:
         return CheckResult(Status.ERROR, f"could not start Lean: {error}")
@@ -192,7 +190,33 @@ def run_lean(function: ast.FunctionDef, contract) -> CheckResult:
     return CheckResult(Status.FAILED, diagnostic or f"Lean exited unexpectedly with status {completed.returncode}")
 
 
-def check(selector: str, contract_path: Path | None = None, backend: str = "lean") -> CheckResult:
+def _needs_lean_fallback(result: CheckResult) -> bool:
+    return result.status is Status.ERROR and any(
+        marker in result.detail
+        for marker in ("Nagini executable not found", "JVM", "could not start Nagini")
+    )
+
+
+def _offer_lean_fallback(function: ast.FunctionDef, contract, nagini_result: CheckResult) -> CheckResult:
+    if not sys.stdin.isatty():
+        return CheckResult(
+            Status.ERROR,
+            f"{nagini_result.detail}\nLean fallback is available; install Lean 4 with elan or rerun interactively to approve installation.",
+        )
+    try:
+        answer = input("Nagini could not start. Install native Lean 4 now? [y/N] ")
+    except EOFError:
+        answer = ""
+    if answer.strip().lower() not in {"y", "yes"}:
+        return nagini_result
+    try:
+        install_lean()
+    except OSError as error:
+        return CheckResult(Status.ERROR, f"could not install Lean: {error}")
+    return run_lean(function, contract)
+
+
+def check(selector: str, contract_path: Path | None = None, backend: str = "nagini") -> CheckResult:
     try:
         file_path, function_name = parse_selector(selector)
     except ValueError as error:
@@ -223,6 +247,8 @@ def check(selector: str, contract_path: Path | None = None, backend: str = "lean
                 verification_path = Path(directory, f"{file_path.stem}_verification.py")
                 verification_path.write_text(annotated_source, encoding="utf-8")
                 result = run_nagini(verification_path, function_name)
+                if _needs_lean_fallback(result):
+                    result = _offer_lean_fallback(function, contract, result)
             elif backend == "lean":
                 result = run_lean(function, contract)
             else:
@@ -292,9 +318,9 @@ def main(argv: list[str] | None = None) -> int:
     )
     check_parser.add_argument(
         "--backend",
-        choices=("lean", "nagini"),
-        default="lean",
-        help="verification backend; Lean supports a deliberately restricted integer Python subset",
+        choices=("nagini", "lean"),
+        default="nagini",
+        help="verification backend; Nagini is default and offers interactive Lean installation if its JVM cannot start",
     )
     check_all_parser = subparsers.add_parser(
         "check-all",
@@ -309,6 +335,12 @@ def main(argv: list[str] | None = None) -> int:
         "--allow-unreviewed",
         action="store_true",
         help="fall back to candidate contracts; still returns a nonzero exit status",
+    )
+    check_all_parser.add_argument(
+        "--backend",
+        choices=("nagini", "lean"),
+        default="nagini",
+        help="verification backend for every selected function",
     )
     propose_parser = subparsers.add_parser(
         "propose",
@@ -404,6 +436,7 @@ def main(argv: list[str] | None = None) -> int:
         results, discovery_errors = run_batch_checks(
             tuple(arguments.targets),
             arguments.allow_unreviewed,
+            arguments.backend,
         )
         print(render_batch_output(results, discovery_errors))
         return 0 if batch_succeeded(results, discovery_errors) else 1

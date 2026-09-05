@@ -105,6 +105,7 @@ def discover_marked_targets(
 def run_batch_checks(
     targets: tuple[Path, ...],
     allow_unreviewed: bool = False,
+    backend: str = "nagini",
 ) -> tuple[tuple[BatchCheckResult, ...], tuple[tuple[Path, str], ...]]:
     marked_targets, discovery_errors = discover_marked_targets(targets)
     results = []
@@ -136,10 +137,15 @@ def run_batch_checks(
             results.append(BatchCheckResult(target.selector, issue=issue, detail=detail))
             continue
 
+        result = (
+            check(target.selector, contract_path)
+            if backend == "nagini"
+            else check(target.selector, contract_path, backend)
+        )
         results.append(
             BatchCheckResult(
                 target.selector,
-                check(target.selector, contract_path),
+                result,
                 contract_path,
                 unreviewed,
             )

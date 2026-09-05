@@ -19,14 +19,14 @@ class LeanIntegrationTests(unittest.TestCase):
     def test_sidecar_good_verifies_without_modifying_source(self) -> None:
         path = Path("examples/sidecar/shot_budget_plain.py")
         original_bytes = path.read_bytes()
-        result = check(f"{path}::allocate_remaining", self.contract_path)
+        result = check(f"{path}::allocate_remaining", self.contract_path, backend="lean")
         self.assertEqual(result.status, Status.VERIFIED)
         self.assertEqual(path.read_bytes(), original_bytes)
 
     def test_sidecar_bad_fails(self) -> None:
         result = check(
             "examples/sidecar/shot_budget_plain_bad.py::allocate_remaining",
-            self.contract_path,
+            self.contract_path, backend="lean",
         )
         self.assertEqual(result.status, Status.FAILED)
         self.assertIn("omega could not prove", result.detail)
@@ -34,14 +34,14 @@ class LeanIntegrationTests(unittest.TestCase):
     def test_research_shot_budget_verifies(self) -> None:
         result = check(
             "examples/research/research_shot_budget.py::remaining_feature_shots",
-            Path("examples/research/research_shot_budget_contract.json"),
+            Path("examples/research/research_shot_budget_contract.json"), backend="lean",
         )
         self.assertEqual(result.status, Status.VERIFIED)
 
     def test_broken_research_shot_budget_fails_conservation(self) -> None:
         result = check(
             "examples/research/research_shot_budget_bad.py::remaining_feature_shots",
-            Path("examples/research/research_shot_budget_contract.json"),
+            Path("examples/research/research_shot_budget_contract.json"), backend="lean",
         )
         self.assertEqual(result.status, Status.FAILED)
         self.assertIn("omega could not prove", result.detail)
@@ -75,7 +75,7 @@ class LeanIntegrationTests(unittest.TestCase):
                 contract_path.parent.mkdir(exist_ok=True)
                 contract_path.write_text(json.dumps(contract), encoding="utf-8")
 
-            results, errors = run_batch_checks((source_path,))
+            results, errors = run_batch_checks((source_path,), backend="lean")
 
         self.assertEqual(errors, ())
         self.assertEqual([item.result.status for item in results], [Status.VERIFIED, Status.FAILED])
@@ -120,8 +120,8 @@ class LeanIntegrationTests(unittest.TestCase):
             good_path.write_text(good_source, encoding="utf-8")
             bad_path.write_text(bad_source, encoding="utf-8")
 
-            good = check(f"{good_path}::nonnegative_part", contract_path)
-            bad = check(f"{bad_path}::nonnegative_part", contract_path)
+            good = check(f"{good_path}::nonnegative_part", contract_path, backend="lean")
+            bad = check(f"{bad_path}::nonnegative_part", contract_path, backend="lean")
 
         self.assertEqual(good.status, Status.VERIFIED)
         self.assertEqual(bad.status, Status.FAILED)
@@ -168,7 +168,7 @@ class LeanIntegrationTests(unittest.TestCase):
             contract_path = Path(directory, "linear.json")
             source_path.write_text(source, encoding="utf-8")
             contract_path.write_text(json.dumps(contract), encoding="utf-8")
-            result = check(f"{source_path}::linear", contract_path)
+            result = check(f"{source_path}::linear", contract_path, backend="lean")
 
         self.assertEqual(result.status, Status.VERIFIED)
 

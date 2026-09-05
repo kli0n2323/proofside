@@ -5,8 +5,8 @@ without learning a framework or a large internal architecture.
 
 ## Development setup
 
-Use Python 3.9–3.14 and Lean 4. The package has no third-party Python runtime
-dependencies and does not require Java for its default Lean backend:
+Use Python 3.9–3.14. On Python 3.12+, the default Nagini backend needs Java 11+
+and its pinned Python dependencies; Lean 4 is the optional native fallback:
 
 ```bash
 git clone https://github.com/kli0n2323/proofside.git
@@ -17,10 +17,8 @@ python -m venv .venv
 python -m pip install -e .
 ```
 
-Install Lean through [elan](https://lean-lang.org/install/manual/). The project
-pins its native Lean version in `lean-toolchain`.
-Nagini remains an optional legacy Python 3.12+ extra (`pip install -e
-'.[nagini]'`) and is the only supported path that needs Java.
+Install Lean through [elan](https://lean-lang.org/install/manual/) when working
+on the fallback; the project pins its native Lean version in `lean-toolchain`.
 
 ## Tests
 

@@ -1,7 +1,11 @@
 from __future__ import annotations
 
 import ast
+import shutil
+import subprocess
+import tempfile
 from pathlib import Path
+from urllib.request import urlopen
 
 from .contracts import (
     Add,
@@ -26,6 +30,48 @@ from .contracts import (
 
 class LeanTranslationError(ContractError):
     """The selected Python/contract fragment has no sound Lean lowering yet."""
+
+
+LEAN_TOOLCHAIN = "leanprover/lean4:v4.33.1"
+
+
+def lean_command() -> list[str] | None:
+    """Return a command for the pinned Lean toolchain when one is available."""
+    elan = shutil.which("elan") or str(Path.home() / ".elan" / "bin" / "elan")
+    if Path(elan).is_file() or shutil.which("elan"):
+        return [elan, "run", LEAN_TOOLCHAIN, "lean"]
+    lean = shutil.which("lean")
+    return [lean] if lean else None
+
+
+def install_lean() -> None:
+    """Install the pinned native Lean toolchain after explicit user approval."""
+    elan = shutil.which("elan") or str(Path.home() / ".elan" / "bin" / "elan")
+    if not (Path(elan).is_file() or shutil.which("elan")):
+        with urlopen("https://elan.lean-lang.org/elan-init.sh") as response:
+            script = response.read()
+        with tempfile.NamedTemporaryFile(prefix="proofside-elan-", suffix=".sh", delete=False) as file:
+            script_path = Path(file.name)
+            file.write(script)
+        try:
+            completed = subprocess.run(
+                ["sh", str(script_path), "-y", "--no-modify-path", "--default-toolchain", "none"],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+        finally:
+            script_path.unlink(missing_ok=True)
+        if completed.returncode:
+            detail = "\n".join(part for part in (completed.stdout, completed.stderr) if part)
+            raise OSError(detail.strip() or "elan installer failed")
+        elan = str(Path.home() / ".elan" / "bin" / "elan")
+    completed = subprocess.run(
+        [elan, "toolchain", "install", LEAN_TOOLCHAIN], capture_output=True, text=True, check=False
+    )
+    if completed.returncode:
+        detail = "\n".join(part for part in (completed.stdout, completed.stderr) if part)
+        raise OSError(detail.strip() or "Lean toolchain installation failed")
 
 
 def _render_value(value: Value, result: str, parent_precedence: int = 0) -> str:
