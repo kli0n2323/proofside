@@ -7,6 +7,7 @@ from proofside.cli import (
     CheckResult,
     Status,
     check,
+    classify_lean,
     classify_nagini,
     load_target,
     parse_selector,
@@ -89,6 +90,16 @@ class ClassificationTests(unittest.TestCase):
 
     def test_classifies_translation_failure_as_error(self) -> None:
         result = classify_nagini(1, "Translation failed\nNot supported: yield\n", "")
+        self.assertEqual(result.status, Status.ERROR)
+
+    def test_classifies_lean_counterexample_as_failed(self) -> None:
+        result = classify_lean(1, "", "error: omega could not prove the goal")
+
+        self.assertEqual(result.status, Status.FAILED)
+
+    def test_classifies_lean_compiler_failure_as_error(self) -> None:
+        result = classify_lean(1, "", "error: unexpected token 'end'")
+
         self.assertEqual(result.status, Status.ERROR)
 
     def test_reports_missing_nagini_as_error(self) -> None:

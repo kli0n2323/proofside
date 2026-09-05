@@ -163,6 +163,16 @@ def run_nagini(file_path: Path, function_name: str) -> CheckResult:
     return classify_nagini(completed.returncode, completed.stdout, completed.stderr)
 
 
+def classify_lean(return_code: int, stdout: str, stderr: str) -> CheckResult:
+    if return_code == 0:
+        return CheckResult(Status.VERIFIED, "Lean 4 discharged the generated proof obligations.")
+
+    diagnostic = "\n".join(part.strip() for part in (stdout, stderr) if part.strip())
+    if "omega could not prove the goal" in diagnostic or "unsolved goals" in diagnostic:
+        return CheckResult(Status.FAILED, diagnostic)
+    return CheckResult(Status.ERROR, diagnostic or f"Lean exited unexpectedly with status {return_code}")
+
+
 def run_lean(function: ast.FunctionDef, contract) -> CheckResult:
     """Prove the supported Python subset by lowering it to a Lean theorem."""
     command = lean_command()
@@ -184,10 +194,7 @@ def run_lean(function: ast.FunctionDef, contract) -> CheckResult:
     except OSError as error:
         return CheckResult(Status.ERROR, f"could not start Lean: {error}")
 
-    if completed.returncode == 0:
-        return CheckResult(Status.VERIFIED, "Lean 4 discharged the generated proof obligations.")
-    diagnostic = "\n".join(part.strip() for part in (completed.stdout, completed.stderr) if part.strip())
-    return CheckResult(Status.FAILED, diagnostic or f"Lean exited unexpectedly with status {completed.returncode}")
+    return classify_lean(completed.returncode, completed.stdout, completed.stderr)
 
 
 def _needs_lean_fallback(result: CheckResult) -> bool:
