@@ -10,10 +10,10 @@ from proofside.cli import Status, check
 
 
 @unittest.skipUnless(
-    os.environ.get("PROOFSIDE_RUN_NAGINI") == "1",
-    "set PROOFSIDE_RUN_NAGINI=1 to run Nagini integration tests",
+    os.environ.get("PROOFSIDE_RUN_LEAN") == "1",
+    "set PROOFSIDE_RUN_LEAN=1 to run Lean integration tests",
 )
-class SidecarIntegrationTests(unittest.TestCase):
+class LeanIntegrationTests(unittest.TestCase):
     contract_path = Path("examples/sidecar/shot_budget_contract.json")
 
     def test_sidecar_good_verifies_without_modifying_source(self) -> None:
@@ -29,7 +29,7 @@ class SidecarIntegrationTests(unittest.TestCase):
             self.contract_path,
         )
         self.assertEqual(result.status, Status.FAILED)
-        self.assertIn("Postcondition", result.detail)
+        self.assertIn("omega could not prove", result.detail)
 
     def test_research_shot_budget_verifies(self) -> None:
         result = check(
@@ -44,7 +44,7 @@ class SidecarIntegrationTests(unittest.TestCase):
             Path("examples/research/research_shot_budget_contract.json"),
         )
         self.assertEqual(result.status, Status.FAILED)
-        self.assertIn("Postcondition", result.detail)
+        self.assertIn("omega could not prove", result.detail)
         self.assertIn("total_shots", result.detail)
 
     def test_batch_runs_independent_real_verifications(self) -> None:
@@ -125,7 +125,7 @@ class SidecarIntegrationTests(unittest.TestCase):
 
         self.assertEqual(good.status, Status.VERIFIED)
         self.assertEqual(bad.status, Status.FAILED)
-        self.assertIn("Postcondition", bad.detail)
+        self.assertIn("omega could not prove", bad.detail)
 
     def test_linear_arithmetic_and_boolean_formulas_verify(self) -> None:
         source = (

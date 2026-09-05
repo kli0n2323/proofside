@@ -54,9 +54,15 @@ proofside check examples/sidecar/shot_budget_plain_bad.py::allocate_remaining \
 
 Lean reports `FAILED` because the extra `+ 1` prevents budget conservation.
 The first Lean backend deliberately supports typed integer functions with one
-straight-line `return` expression using names, integers, `+`, `-`, and `*`.
+return expression, local assignments, and `if`/`else` branches using names,
+integers, `+`, `-`, and `*`.
 Unsupported Python constructs are reported as `UNSUPPORTED`; they are never
 silently modeled as something else.
+
+Nagini remains available for legacy Python 3.12+ workflows, but is never
+installed by default: `pip install 'proofside[nagini]'`, then select
+`--backend nagini`.
+That optional backend retains its own Java requirement.
 Prefixing commands with `python -m proofside` is also supported.
 
 ## Examples

@@ -76,20 +76,74 @@ def _render_formula(formula: Formula, result: str) -> str:
     raise LeanTranslationError(f"unsupported contract formula: {type(formula).__name__}")
 
 
-def _render_python_expression(node: ast.expr) -> str:
+def _render_python_expression(node: ast.expr, environment: dict[str, str]) -> str:
     if isinstance(node, ast.Name):
-        return node.id
+        try:
+            return environment[node.id]
+        except KeyError as error:
+            raise LeanTranslationError(f"Lean backend found an unbound name: {node.id}") from error
     if isinstance(node, ast.Constant) and type(node.value) is int:
         return str(node.value)
     if isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.USub):
-        return f"-({_render_python_expression(node.operand)})"
+        return f"-({_render_python_expression(node.operand, environment)})"
     if isinstance(node, ast.BinOp):
         operators = {ast.Add: "+", ast.Sub: "-", ast.Mult: "*"}
         operator = operators.get(type(node.op))
         if operator is not None:
-            return f"({_render_python_expression(node.left)} {operator} {_render_python_expression(node.right)})"
+            return (
+                f"({_render_python_expression(node.left, environment)} {operator} "
+                f"{_render_python_expression(node.right, environment)})"
+            )
     raise LeanTranslationError(
         "Lean backend supports only straight-line integer return expressions using names, integers, +, -, and *"
+    )
+
+
+def _render_python_condition(node: ast.expr, environment: dict[str, str]) -> str:
+    if isinstance(node, ast.Compare) and len(node.ops) == 1 and len(node.comparators) == 1:
+        operators = {
+            ast.Eq: "=", ast.NotEq: "≠", ast.Lt: "<", ast.LtE: "≤", ast.Gt: ">", ast.GtE: "≥",
+        }
+        operator = operators.get(type(node.ops[0]))
+        if operator is not None:
+            return (
+                f"{_render_python_expression(node.left, environment)} {operator} "
+                f"{_render_python_expression(node.comparators[0], environment)}"
+            )
+    if isinstance(node, ast.BoolOp) and isinstance(node.op, (ast.And, ast.Or)):
+        connector = " ∧ " if isinstance(node.op, ast.And) else " ∨ "
+        return connector.join(
+            f"({_render_python_condition(value, environment)})" for value in node.values
+        )
+    if isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.Not):
+        return f"¬ ({_render_python_condition(node.operand, environment)})"
+    raise LeanTranslationError("Lean backend supports conditions made from integer comparisons, and, or, and not")
+
+
+def _compile_block(statements: list[ast.stmt], environment: dict[str, str]) -> str:
+    """Symbolically execute a side-effect-free Python block into one Lean expression."""
+    if not statements:
+        raise LeanTranslationError("function can fall through without returning a value")
+    statement, remaining = statements[0], statements[1:]
+    if isinstance(statement, ast.Return):
+        if statement.value is None:
+            raise LeanTranslationError("Lean backend does not support bare return")
+        if remaining:
+            raise LeanTranslationError("statements after return are not supported")
+        return _render_python_expression(statement.value, environment)
+    if isinstance(statement, ast.Assign) and len(statement.targets) == 1 and isinstance(statement.targets[0], ast.Name):
+        next_environment = dict(environment)
+        next_environment[statement.targets[0].id] = _render_python_expression(statement.value, environment)
+        return _compile_block(remaining, next_environment)
+    if isinstance(statement, ast.If):
+        if not statement.orelse:
+            raise LeanTranslationError("Lean backend requires an explicit else branch")
+        condition = _render_python_condition(statement.test, environment)
+        then_result = _compile_block([*statement.body, *remaining], dict(environment))
+        else_result = _compile_block([*statement.orelse, *remaining], dict(environment))
+        return f"(if {condition} then {then_result} else {else_result})"
+    raise LeanTranslationError(
+        "Lean backend supports assignments, if/else, and return; calls, loops, mutation, and exceptions are unsupported"
     )
 
 
@@ -110,9 +164,6 @@ def _arguments(function: ast.FunctionDef) -> list[str]:
 def build_lean_source(function: ast.FunctionDef, contract: Contract) -> str:
     """Lower a deliberately small, semantics-preserving Python fragment to Lean."""
     arguments = _arguments(function)
-    if len(function.body) != 1 or not isinstance(function.body[0], ast.Return) or function.body[0].value is None:
-        raise LeanTranslationError("Lean backend supports only a function body containing one return expression")
-
     function_application = " ".join([function.name, *arguments])
     result = f"({function_application})" if arguments else function.name
     parameter_text = " ".join(arguments)
@@ -123,7 +174,7 @@ def build_lean_source(function: ast.FunctionDef, contract: Contract) -> str:
     if not ensures:
         raise LeanTranslationError("Lean backend requires at least one postcondition")
     guarantee = " ∧ ".join(f"({formula})" for formula in ensures)
-    body = _render_python_expression(function.body[0].value)
+    body = _compile_block(function.body, {argument: argument for argument in arguments})
 
     return (
         "import Lean.Elab.Tactic.Omega\n\n"
@@ -133,6 +184,5 @@ def build_lean_source(function: ast.FunctionDef, contract: Contract) -> str:
         f"{theorem_arguments}"
         f"{''.join(requires)}"
         f"    : {guarantee} := by\n"
-        f"  simp only [{function.name}]\n"
-        "  omega\n"
+        f"  simp [{function.name}] <;> omega\n"
     )

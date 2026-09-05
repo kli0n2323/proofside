@@ -18,19 +18,20 @@ class LeanLoweringTests(unittest.TestCase):
         self.assertIn("import Lean.Elab.Tactic.Omega", source)
         self.assertIn("def allocate_remaining (total_shots first_bucket : Int)", source)
         self.assertIn("theorem allocate_remaining_proofside_contract", source)
-        self.assertIn("simp only [allocate_remaining]", source)
+        self.assertIn("simp [allocate_remaining] <;> omega", source)
         self.assertIn("omega", source)
 
-    def test_rejects_branching_body(self) -> None:
+    def test_lowers_if_else_and_assignments(self) -> None:
         function = ast.parse(
             "def choose(value: int) -> int:\n"
             "    if value >= 0:\n"
             "        return value\n"
-            "    return -value\n"
+            "    else:\n"
+            "        return 0\n"
         ).body[0]
         contract = load_contract(__import__("pathlib").Path("examples/sidecar/shot_budget_contract.json"))
-        with self.assertRaisesRegex(LeanTranslationError, "one return expression"):
-            build_lean_source(function, contract)
+        source = build_lean_source(function, contract)
+        self.assertIn("if value ≥ 0 then value else 0", source)
 
 
 if __name__ == "__main__":

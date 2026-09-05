@@ -36,3 +36,6 @@ jobs:
       - run: $HOME/.elan/bin/lean --version
       - run: python -m pip install .
       - run: PATH="$HOME/.elan/bin:$PATH" proofside check examples/sidecar/shot_budget_plain.py::allocate_remaining --contract examples/sidecar/shot_budget_contract.json
+      - run: PATH="$HOME/.elan/bin:$PATH" python -m unittest tests.test_integration -v
+        env:
+          PROOFSIDE_RUN_LEAN: "1"
