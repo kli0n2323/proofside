@@ -30,7 +30,7 @@ not copy them into the current directory. Clone or download the repository when
 you want to run them:
 
 ```bash
-git clone https://github.com/kli0n2323/proofside.git
+git clone https://github.com/EricSpencer00/proofside.git
 cd proofside
 ```
 
@@ -70,7 +70,7 @@ Prefixing commands with `python -m proofside` is also supported.
 | Path | Purpose |
 | --- | --- |
 | `examples/sidecar/` | Model-free Proofside JSON contract workflow: good and bad implementations share one explicit contract. |
-| `examples/nagini/` | Direct handwritten Nagini contracts. Proofside supports this path but does not parse Nagini annotations back into its IR. |
+| `examples/nagini/` | Legacy handwritten Nagini contracts; use the optional `nagini` extra and `--backend nagini`. |
 | `examples/annotated/shot_budget_annotated.py` | Smallest annotation-first specification and proposal example. |
 | `examples/annotated/model_workflow_stress.py` | Eight-function model-assisted stress fixture with both matching and intentionally mismatched implementations. Its annotations are normative; bodies are withheld by default. |
 | `examples/research/` | Research-derived bookkeeping example with careful, limited provenance. |
@@ -120,14 +120,14 @@ manually authored JSON contract ─────────┘
                      ↓
        deterministic Proofside lowering
                      ↓
-            Nagini / Viper / Z3
+                Lean 4
                      ↓
      VERIFIED / FAILED / UNSUPPORTED / ERROR
 ```
 
-Handwritten Nagini contracts provide a lower-level route directly to Nagini.
-In every route, Nagini/Viper—not a model—decides whether proof obligations are
-discharged.
+Lean—not a model—decides whether proof obligations are discharged for the
+supported Python-to-Lean source boundary. The legacy Nagini route remains
+available only when explicitly selected with `--backend nagini`.
 
 To ask an explicitly selected model for a candidate:
 
@@ -173,14 +173,16 @@ existing accepted contract, and validation completes before replacement.
 
 No model is needed for either contract route. A manually authored JSON contract
 may be checked directly with `check --contract`; it does not have to pass through
-`accept`. Advanced users may instead keep handwritten Nagini annotations in the
-function:
+`accept`. Legacy handwritten Nagini annotations require the optional extra and
+explicit backend:
 
 ```bash
-proofside check examples/nagini/shot_budget_good.py::allocate_remaining
+pip install 'proofside[nagini]'
+proofside check examples/nagini/shot_budget_good.py::allocate_remaining --backend nagini
 ```
 
-Proofside does not parse handwritten Nagini annotations into its contract IR.
+Proofside does not parse handwritten Nagini annotations into its contract IR;
+they are outside the default Lean workflow.
 
 ## Specification sources
 
@@ -306,15 +308,16 @@ value < 0  -> result == 0
 That says more than weakening the function to global bounds such as
 `result >= 0`.
 
-It contains no raw Python or Nagini snippets.
+It contains no raw Python or Lean snippets.
 
 Proofside currently selects top-level synchronous functions with complete
 parameter and return annotations. Decorated, async, nested, ambiguous, or
-untyped targets are rejected. Sidecar mode also rejects function docstrings and
-one-line bodies.
+untyped targets are rejected. The Lean backend further requires integer
+parameters and result types, and supports local assignments plus explicit
+`if`/`else` control flow.
 
-The selected function must be self-contained. Sidecar source generation does
-not preserve arbitrary imports, helpers, closures, comments, or module state.
+The selected function must be self-contained. Lean lowering does not preserve
+arbitrary imports, helpers, closures, comments, or module state.
 Proofside does not provide verification semantics for arbitrary Python, NumPy,
 SciPy, or research frameworks.
 
@@ -361,7 +364,8 @@ improves a downstream task, or that a policy transfers to hardware.
 
 For checkout and editable-install contributor setup, see
 [`CONTRIBUTING.md`](CONTRIBUTING.md), along with tests, the code map, and design
-constraints. Install Lean 4 through `elan`; no Java runtime is required.
+constraints. Install Lean 4 through `elan`; no Java runtime is required for the
+default backend.
 
 See [`ROADMAP.md`](ROADMAP.md) for suggested contribution directions.
 
@@ -372,8 +376,8 @@ See [`ROADMAP.md`](ROADMAP.md) for suggested contribution directions.
 | [Lean](https://lean-lang.org/) | 4.33.1 | Apache-2.0 | Native theorem prover selected by `lean-toolchain` |
 
 Proofside depends on these projects but contains no copied or adapted
-third-party source. Python and Java are execution prerequisites distributed
-under their respective licenses.
+third-party source. Python and Lean are execution prerequisites for the default
+backend and are distributed under their respective licenses.
 
 Proofside is licensed under the Apache License 2.0. See [`LICENSE`](LICENSE).
 

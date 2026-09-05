@@ -1,3 +1,3 @@
-"""Proofside's deliberately small Nagini command-line wrapper."""
+"""Proofside's deliberately small Lean-backed command-line verifier."""
 
 
