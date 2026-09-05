@@ -14,7 +14,7 @@ and a model never determines whether a proof succeeds.
 
 ## Quick start
 
-This Lean 4 fork supports 64-bit Python 3.12–3.14 and a native Lean 4
+This Lean 4 fork supports Python 3.9–3.14 and a native Lean 4
 toolchain; it does not require Java. Install Lean with
 [elan](https://lean-lang.org/install/manual/), then install this local fork:
 

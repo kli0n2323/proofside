@@ -9,7 +9,7 @@ description = "A small formal-verification sidecar for typed mathematical Python
 readme = "README.md"
 license = "Apache-2.0"
 license-files = ["LICENSE"]
-requires-python = ">=3.12,<3.15"
+requires-python = ">=3.9,<3.15"
 dependencies = []
 
 [project.urls]
