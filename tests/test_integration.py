@@ -1,5 +1,7 @@
 import json
 import os
+import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -30,6 +32,80 @@ class LeanIntegrationTests(unittest.TestCase):
         )
         self.assertEqual(result.status, Status.FAILED)
         self.assertIn("omega could not prove", result.detail)
+
+    def test_module_cli_reports_verified_and_failed(self) -> None:
+        command = [
+            sys.executable,
+            "-m",
+            "proofside",
+            "check",
+            "examples/sidecar/shot_budget_plain.py::allocate_remaining",
+            "--contract",
+            "examples/sidecar/shot_budget_contract.json",
+            "--backend",
+            "lean",
+        ]
+        verified = subprocess.run(command, capture_output=True, text=True, check=False)
+        failed = subprocess.run(
+            [
+                *command[:4],
+                "examples/sidecar/shot_budget_plain_bad.py::allocate_remaining",
+                *command[5:],
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+        self.assertEqual(verified.returncode, 0, verified.stderr)
+        self.assertIn("VERIFIED", verified.stdout)
+        self.assertEqual(failed.returncode, 1, failed.stderr)
+        self.assertIn("FAILED", failed.stdout)
+
+    def test_nullary_integer_function_verifies(self) -> None:
+        source = "def answer() -> int:\n    return 42\n"
+        contract = {
+            "requires": [],
+            "ensures": [
+                {
+                    "kind": "compare",
+                    "operator": "==",
+                    "left": {"kind": "result"},
+                    "right": {"kind": "integer", "value": 42},
+                }
+            ],
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            source_path = Path(directory, "answer.py")
+            contract_path = Path(directory, "answer.json")
+            source_path.write_text(source, encoding="utf-8")
+            contract_path.write_text(json.dumps(contract), encoding="utf-8")
+            result = check(f"{source_path}::answer", contract_path, backend="lean")
+
+        self.assertEqual(result.status, Status.VERIFIED, result.detail)
+
+    def test_loop_is_reported_unsupported_before_invoking_lean(self) -> None:
+        source = "def count(value: int) -> int:\n    while value > 0:\n        value = value - 1\n    return value\n"
+        contract = {
+            "requires": [],
+            "ensures": [
+                {
+                    "kind": "compare",
+                    "operator": "==",
+                    "left": {"kind": "result"},
+                    "right": {"kind": "integer", "value": 0},
+                }
+            ],
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            source_path = Path(directory, "loop.py")
+            contract_path = Path(directory, "loop.json")
+            source_path.write_text(source, encoding="utf-8")
+            contract_path.write_text(json.dumps(contract), encoding="utf-8")
+            result = check(f"{source_path}::count", contract_path, backend="lean")
+
+        self.assertEqual(result.status, Status.UNSUPPORTED)
+        self.assertIn("calls, loops, mutation, and exceptions", result.detail)
 
     def test_research_shot_budget_verifies(self) -> None:
         result = check(
