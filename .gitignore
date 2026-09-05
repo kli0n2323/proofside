@@ -10,3 +10,4 @@ __pycache__/
 .mypy_cache_strict/
 .env
 .env.*
+uv.lock

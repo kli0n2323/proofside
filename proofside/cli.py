@@ -4,6 +4,7 @@ import argparse
 import ast
 import shutil
 import subprocess
+import sys
 import tempfile
 from dataclasses import dataclass
 from enum import Enum
@@ -17,6 +18,7 @@ from .contracts import (
     render_human,
     validate_contract,
 )
+from .lean import LeanTranslationError, build_lean_source, install_lean, lean_command
 
 
 class Status(str, Enum):
@@ -161,7 +163,67 @@ def run_nagini(file_path: Path, function_name: str) -> CheckResult:
     return classify_nagini(completed.returncode, completed.stdout, completed.stderr)
 
 
-def check(selector: str, contract_path: Path | None = None) -> CheckResult:
+def classify_lean(return_code: int, stdout: str, stderr: str) -> CheckResult:
+    if return_code == 0:
+        return CheckResult(Status.VERIFIED, "Lean 4 discharged the generated proof obligations.")
+
+    diagnostic = "\n".join(part.strip() for part in (stdout, stderr) if part.strip())
+    if "omega could not prove the goal" in diagnostic or "unsolved goals" in diagnostic:
+        return CheckResult(Status.FAILED, diagnostic)
+    return CheckResult(Status.ERROR, diagnostic or f"Lean exited unexpectedly with status {return_code}")
+
+
+def run_lean(function: ast.FunctionDef, contract) -> CheckResult:
+    """Prove the supported Python subset by lowering it to a Lean theorem."""
+    command = lean_command()
+    if not command:
+        return CheckResult(Status.ERROR, "Lean executable not found; install Lean 4 with elan")
+
+    try:
+        source = build_lean_source(function, contract)
+    except LeanTranslationError as error:
+        return CheckResult(Status.UNSUPPORTED, str(error))
+
+    try:
+        with tempfile.TemporaryDirectory(prefix="proofside-lean-") as directory:
+            proof_path = Path(directory, f"{function.name}.lean")
+            proof_path.write_text(source, encoding="utf-8")
+            completed = subprocess.run(
+                [*command, str(proof_path)], capture_output=True, text=True, check=False
+            )
+    except OSError as error:
+        return CheckResult(Status.ERROR, f"could not start Lean: {error}")
+
+    return classify_lean(completed.returncode, completed.stdout, completed.stderr)
+
+
+def _needs_lean_fallback(result: CheckResult) -> bool:
+    return result.status is Status.ERROR and any(
+        marker in result.detail
+        for marker in ("Nagini executable not found", "JVM", "could not start Nagini")
+    )
+
+
+def _offer_lean_fallback(function: ast.FunctionDef, contract, nagini_result: CheckResult) -> CheckResult:
+    if not sys.stdin.isatty():
+        return CheckResult(
+            Status.ERROR,
+            f"{nagini_result.detail}\nLean fallback is available; install Lean 4 with elan or rerun interactively to approve installation.",
+        )
+    try:
+        answer = input("Nagini could not start. Install native Lean 4 now? [y/N] ")
+    except EOFError:
+        answer = ""
+    if answer.strip().lower() not in {"y", "yes"}:
+        return nagini_result
+    try:
+        install_lean()
+    except OSError as error:
+        return CheckResult(Status.ERROR, f"could not install Lean: {error}")
+    return run_lean(function, contract)
+
+
+def check(selector: str, contract_path: Path | None = None, backend: str = "nagini") -> CheckResult:
     try:
         file_path, function_name = parse_selector(selector)
     except ValueError as error:
@@ -172,23 +234,32 @@ def check(selector: str, contract_path: Path | None = None) -> CheckResult:
         return target
     source, function = target
 
-    if contract_path is None:
+    if backend == "nagini" and contract_path is None:
         return run_nagini(file_path, function_name)
+    if backend == "lean" and contract_path is None:
+        return CheckResult(Status.UNSUPPORTED, "Lean backend requires an explicit Proofside JSON sidecar contract")
 
     try:
         contract = load_contract(contract_path)
         parameters = {argument.arg for argument in _function_arguments(function)}
         validate_contract(contract, parameters)
         contract_text = render_human(contract)
-        annotated_source = build_annotated_source(source, function, contract)
+        annotated_source = build_annotated_source(source, function, contract) if backend == "nagini" else None
     except ContractError as error:
         return CheckResult(Status.ERROR, f"invalid contract: {error}")
 
     try:
         with tempfile.TemporaryDirectory(prefix="proofside-") as directory:
-            verification_path = Path(directory, f"{file_path.stem}_verification.py")
-            verification_path.write_text(annotated_source, encoding="utf-8")
-            result = run_nagini(verification_path, function_name)
+            if backend == "nagini":
+                verification_path = Path(directory, f"{file_path.stem}_verification.py")
+                verification_path.write_text(annotated_source, encoding="utf-8")
+                result = run_nagini(verification_path, function_name)
+                if _needs_lean_fallback(result):
+                    result = _offer_lean_fallback(function, contract, result)
+            elif backend == "lean":
+                result = run_lean(function, contract)
+            else:
+                return CheckResult(Status.ERROR, f"unknown verification backend: {backend}")
     except OSError as error:
         return CheckResult(Status.ERROR, f"could not create temporary verification source: {error}")
 
@@ -201,7 +272,7 @@ def render_proof_boundary(result: CheckResult) -> str:
     if result.status is Status.VERIFIED:
         lines = [
             "Proof boundary",
-            "- The selected implementation satisfies the displayed guarantees under the displayed assumptions, according to Nagini/Viper.",
+            "- The selected implementation satisfies the displayed guarantees under the displayed assumptions, according to the selected verifier.",
             "- Preconditions remain assumptions about valid callers and inputs.",
             "- The proof covers only the displayed contract and the supported verification semantics.",
             "- It does not establish scientific validity, empirical correspondence, usefulness, or optimality.",
@@ -252,6 +323,12 @@ def main(argv: list[str] | None = None) -> int:
         type=Path,
         help="structured JSON sidecar; omit for handwritten Nagini contracts",
     )
+    check_parser.add_argument(
+        "--backend",
+        choices=("nagini", "lean"),
+        default="nagini",
+        help="verification backend; Nagini is default and offers interactive Lean installation if its JVM cannot start",
+    )
     check_all_parser = subparsers.add_parser(
         "check-all",
         help="verify Proofside-marked functions using source-adjacent contracts",
@@ -265,6 +342,12 @@ def main(argv: list[str] | None = None) -> int:
         "--allow-unreviewed",
         action="store_true",
         help="fall back to candidate contracts; still returns a nonzero exit status",
+    )
+    check_all_parser.add_argument(
+        "--backend",
+        choices=("nagini", "lean"),
+        default="nagini",
+        help="verification backend for every selected function",
     )
     propose_parser = subparsers.add_parser(
         "propose",
@@ -350,7 +433,7 @@ def main(argv: list[str] | None = None) -> int:
     arguments = parser.parse_args(argv)
 
     if arguments.command == "check":
-        result = check(arguments.selector, arguments.contract)
+        result = check(arguments.selector, arguments.contract, arguments.backend)
         print(render_output(result))
         return 0 if result.status is Status.VERIFIED else 1
 
@@ -360,6 +443,7 @@ def main(argv: list[str] | None = None) -> int:
         results, discovery_errors = run_batch_checks(
             tuple(arguments.targets),
             arguments.allow_unreviewed,
+            arguments.backend,
         )
         print(render_batch_output(results, discovery_errors))
         return 0 if batch_succeeded(results, discovery_errors) else 1

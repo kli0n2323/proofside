@@ -5,7 +5,8 @@ without learning a framework or a large internal architecture.
 
 ## Development setup
 
-Use 64-bit Python 3.12–3.14 and Java 11 or newer:
+Use Python 3.9–3.14. Nagini remains the default verifier on Python 3.12+ and
+needs Java 11 or newer.
 
 ```bash
 git clone https://github.com/kli0n2323/proofside.git
@@ -28,17 +29,17 @@ credential or running model:
 python -m unittest discover -s tests -v
 ```
 
-The seven slow integration tests invoke Nagini/Viper. On Linux or macOS:
+The default Nagini smoke check needs Java 11+ and Python 3.12+:
 
 ```bash
-PROOFSIDE_RUN_NAGINI=1 python -m unittest tests.test_integration -v
+proofside check examples/sidecar/shot_budget_plain.py::allocate_remaining \
+  --contract examples/sidecar/shot_budget_contract.json --backend nagini
 ```
 
-On Windows PowerShell:
+The optional Lean integration suite needs the Lean toolchain:
 
-```powershell
-$env:PROOFSIDE_RUN_NAGINI = "1"
-python -m unittest tests.test_integration -v
+```bash
+PROOFSIDE_RUN_LEAN=1 python -m unittest tests.test_integration -v
 ```
 
 Before submitting a change, run the fast suite and any integration test affected
@@ -62,19 +63,19 @@ by it. Live model calls are not part of the automated suite.
   `propose-all` / `check-all` orchestration.
 - `examples/` — workflow-organized sidecar, handwritten Nagini, annotated,
   research-inspired, and unsupported demonstrations.
-- `tests/` — fast Proofside-owned boundaries and opt-in Nagini integrations.
+- `tests/` — fast Proofside-owned boundaries and opt-in verifier integrations.
 
 ## Design constraints
 
 Please preserve these boundaries:
 
-- Nagini/Viper gets the final word on proof success.
+- The selected verifier gets the final word on proof success.
 - Declared specification and implementation are distinct; a function body is
   model context only when the user explicitly selects it.
 - Model proposal never verifies, accepts, or edits a contract automatically.
 - Acceptance records selection for verification but never performs verification.
 - Manual sidecars, handwritten Nagini contracts, and optional model proposals
-  are all supported paths to the same verifier.
+  are supported verification paths.
 - Model output and sidecar JSON are untrusted until strictly parsed and validated.
 - Batch commands orchestrate independent single-function pipelines; they do not
   create a batch contract or proof.

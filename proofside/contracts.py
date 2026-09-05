@@ -5,7 +5,7 @@ import json
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import TypeAlias
+from typing import Union
 
 
 class ContractError(ValueError):
@@ -50,7 +50,7 @@ class Scale:
     value: Value
 
 
-Value: TypeAlias = Variable | Integer | ResultValue | Add | Subtract | Negate | Scale
+Value = Union[Variable, Integer, ResultValue, Add, Subtract, Negate, Scale]
 
 
 class ComparisonOperator(str, Enum):
@@ -90,7 +90,7 @@ class Implies:
     consequent: Formula
 
 
-Formula: TypeAlias = Comparison | And | Or | Not | Implies
+Formula = Union[Comparison, And, Or, Not, Implies]
 
 
 @dataclass(frozen=True)

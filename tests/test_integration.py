@@ -1,5 +1,7 @@
 import json
 import os
+import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -10,41 +12,115 @@ from proofside.cli import Status, check
 
 
 @unittest.skipUnless(
-    os.environ.get("PROOFSIDE_RUN_NAGINI") == "1",
-    "set PROOFSIDE_RUN_NAGINI=1 to run Nagini integration tests",
+    os.environ.get("PROOFSIDE_RUN_LEAN") == "1",
+    "set PROOFSIDE_RUN_LEAN=1 to run Lean integration tests",
 )
-class SidecarIntegrationTests(unittest.TestCase):
+class LeanIntegrationTests(unittest.TestCase):
     contract_path = Path("examples/sidecar/shot_budget_contract.json")
 
     def test_sidecar_good_verifies_without_modifying_source(self) -> None:
         path = Path("examples/sidecar/shot_budget_plain.py")
         original_bytes = path.read_bytes()
-        result = check(f"{path}::allocate_remaining", self.contract_path)
+        result = check(f"{path}::allocate_remaining", self.contract_path, backend="lean")
         self.assertEqual(result.status, Status.VERIFIED)
         self.assertEqual(path.read_bytes(), original_bytes)
 
     def test_sidecar_bad_fails(self) -> None:
         result = check(
             "examples/sidecar/shot_budget_plain_bad.py::allocate_remaining",
-            self.contract_path,
+            self.contract_path, backend="lean",
         )
         self.assertEqual(result.status, Status.FAILED)
-        self.assertIn("Postcondition", result.detail)
+        self.assertIn("omega could not prove", result.detail)
+
+    def test_module_cli_reports_verified_and_failed(self) -> None:
+        command = [
+            sys.executable,
+            "-m",
+            "proofside",
+            "check",
+            "examples/sidecar/shot_budget_plain.py::allocate_remaining",
+            "--contract",
+            "examples/sidecar/shot_budget_contract.json",
+            "--backend",
+            "lean",
+        ]
+        verified = subprocess.run(command, capture_output=True, text=True, check=False)
+        failed = subprocess.run(
+            [
+                *command[:4],
+                "examples/sidecar/shot_budget_plain_bad.py::allocate_remaining",
+                *command[5:],
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+        self.assertEqual(verified.returncode, 0, verified.stderr)
+        self.assertIn("VERIFIED", verified.stdout)
+        self.assertEqual(failed.returncode, 1, failed.stderr)
+        self.assertIn("FAILED", failed.stdout)
+
+    def test_nullary_integer_function_verifies(self) -> None:
+        source = "def answer() -> int:\n    return 42\n"
+        contract = {
+            "requires": [],
+            "ensures": [
+                {
+                    "kind": "compare",
+                    "operator": "==",
+                    "left": {"kind": "result"},
+                    "right": {"kind": "integer", "value": 42},
+                }
+            ],
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            source_path = Path(directory, "answer.py")
+            contract_path = Path(directory, "answer.json")
+            source_path.write_text(source, encoding="utf-8")
+            contract_path.write_text(json.dumps(contract), encoding="utf-8")
+            result = check(f"{source_path}::answer", contract_path, backend="lean")
+
+        self.assertEqual(result.status, Status.VERIFIED, result.detail)
+
+    def test_loop_is_reported_unsupported_before_invoking_lean(self) -> None:
+        source = "def count(value: int) -> int:\n    while value > 0:\n        value = value - 1\n    return value\n"
+        contract = {
+            "requires": [],
+            "ensures": [
+                {
+                    "kind": "compare",
+                    "operator": "==",
+                    "left": {"kind": "result"},
+                    "right": {"kind": "integer", "value": 0},
+                }
+            ],
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            source_path = Path(directory, "loop.py")
+            contract_path = Path(directory, "loop.json")
+            source_path.write_text(source, encoding="utf-8")
+            contract_path.write_text(json.dumps(contract), encoding="utf-8")
+            result = check(f"{source_path}::count", contract_path, backend="lean")
+
+        self.assertEqual(result.status, Status.UNSUPPORTED)
+        self.assertIn("calls, loops, mutation, and exceptions", result.detail)
 
     def test_research_shot_budget_verifies(self) -> None:
         result = check(
             "examples/research/research_shot_budget.py::remaining_feature_shots",
-            Path("examples/research/research_shot_budget_contract.json"),
+            Path("examples/research/research_shot_budget_contract.json"), backend="lean",
         )
         self.assertEqual(result.status, Status.VERIFIED)
 
     def test_broken_research_shot_budget_fails_conservation(self) -> None:
         result = check(
             "examples/research/research_shot_budget_bad.py::remaining_feature_shots",
-            Path("examples/research/research_shot_budget_contract.json"),
+            Path("examples/research/research_shot_budget_contract.json"), backend="lean",
         )
         self.assertEqual(result.status, Status.FAILED)
-        self.assertIn("Postcondition", result.detail)
+        self.assertIn("omega could not prove", result.detail)
         self.assertIn("total_shots", result.detail)
 
     def test_batch_runs_independent_real_verifications(self) -> None:
@@ -75,7 +151,7 @@ class SidecarIntegrationTests(unittest.TestCase):
                 contract_path.parent.mkdir(exist_ok=True)
                 contract_path.write_text(json.dumps(contract), encoding="utf-8")
 
-            results, errors = run_batch_checks((source_path,))
+            results, errors = run_batch_checks((source_path,), backend="lean")
 
         self.assertEqual(errors, ())
         self.assertEqual([item.result.status for item in results], [Status.VERIFIED, Status.FAILED])
@@ -120,12 +196,12 @@ class SidecarIntegrationTests(unittest.TestCase):
             good_path.write_text(good_source, encoding="utf-8")
             bad_path.write_text(bad_source, encoding="utf-8")
 
-            good = check(f"{good_path}::nonnegative_part", contract_path)
-            bad = check(f"{bad_path}::nonnegative_part", contract_path)
+            good = check(f"{good_path}::nonnegative_part", contract_path, backend="lean")
+            bad = check(f"{bad_path}::nonnegative_part", contract_path, backend="lean")
 
         self.assertEqual(good.status, Status.VERIFIED)
         self.assertEqual(bad.status, Status.FAILED)
-        self.assertIn("Postcondition", bad.detail)
+        self.assertIn("omega could not prove", bad.detail)
 
     def test_linear_arithmetic_and_boolean_formulas_verify(self) -> None:
         source = (
@@ -168,7 +244,7 @@ class SidecarIntegrationTests(unittest.TestCase):
             contract_path = Path(directory, "linear.json")
             source_path.write_text(source, encoding="utf-8")
             contract_path.write_text(json.dumps(contract), encoding="utf-8")
-            result = check(f"{source_path}::linear", contract_path)
+            result = check(f"{source_path}::linear", contract_path, backend="lean")
 
         self.assertEqual(result.status, Status.VERIFIED)
 

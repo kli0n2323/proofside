@@ -7,6 +7,7 @@ from proofside.cli import (
     CheckResult,
     Status,
     check,
+    classify_lean,
     classify_nagini,
     load_target,
     parse_selector,
@@ -91,11 +92,65 @@ class ClassificationTests(unittest.TestCase):
         result = classify_nagini(1, "Translation failed\nNot supported: yield\n", "")
         self.assertEqual(result.status, Status.ERROR)
 
+    def test_classifies_lean_counterexample_as_failed(self) -> None:
+        result = classify_lean(1, "", "error: omega could not prove the goal")
+
+        self.assertEqual(result.status, Status.FAILED)
+
+    def test_classifies_lean_compiler_failure_as_error(self) -> None:
+        result = classify_lean(1, "", "error: unexpected token 'end'")
+
+        self.assertEqual(result.status, Status.ERROR)
+
     def test_reports_missing_nagini_as_error(self) -> None:
         with patch("proofside.cli.shutil.which", return_value=None):
-            result = check("examples/nagini/shot_budget_good.py::allocate_remaining")
+            result = check(
+                "examples/nagini/shot_budget_good.py::allocate_remaining",
+                backend="nagini",
+            )
         self.assertEqual(result.status, Status.ERROR)
         self.assertIn("executable not found", result.detail)
+
+    def test_noninteractive_jvm_failure_does_not_download_lean(self) -> None:
+        unavailable = CheckResult(Status.ERROR, "JVM DLL not found")
+
+        class NonInteractiveInput:
+            def isatty(self):
+                return False
+
+        with patch("proofside.cli.run_nagini", return_value=unavailable), patch(
+            "proofside.cli.sys.stdin", NonInteractiveInput()
+        ), patch("proofside.cli.install_lean") as install:
+            result = check(
+                "examples/sidecar/shot_budget_plain.py::allocate_remaining",
+                Path("examples/sidecar/shot_budget_contract.json"),
+            )
+
+        self.assertEqual(result.status, Status.ERROR)
+        self.assertIn("Lean fallback is available", result.detail)
+        install.assert_not_called()
+
+    def test_interactive_jvm_failure_installs_then_runs_lean(self) -> None:
+        unavailable = CheckResult(Status.ERROR, "JVM DLL not found")
+        verified = CheckResult(Status.VERIFIED, "Lean proved it")
+
+        class InteractiveInput:
+            def isatty(self):
+                return True
+
+        with patch("proofside.cli.run_nagini", return_value=unavailable), patch(
+            "proofside.cli.sys.stdin", InteractiveInput()
+        ), patch("builtins.input", return_value="y"), patch(
+            "proofside.cli.install_lean"
+        ) as install, patch("proofside.cli.run_lean", return_value=verified):
+            result = check(
+                "examples/sidecar/shot_budget_plain.py::allocate_remaining",
+                Path("examples/sidecar/shot_budget_contract.json"),
+            )
+
+        self.assertEqual(result.status, Status.VERIFIED)
+        self.assertEqual(result.detail, "Lean proved it")
+        install.assert_called_once_with()
 
 
 class OutputTests(unittest.TestCase):
