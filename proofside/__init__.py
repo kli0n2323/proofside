@@ -1,3 +1,3 @@
-"""Proofside's deliberately small Lean-backed command-line verifier."""
+"""Proofside's deliberately small command-line verification sidecar."""
 
 
