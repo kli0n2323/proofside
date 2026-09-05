@@ -9,7 +9,7 @@ Use Python 3.9–3.14 and Lean 4. The package has no third-party Python runtime
 dependencies and does not require Java for its default Lean backend:
 
 ```bash
-git clone https://github.com/EricSpencer00/proofside.git
+git clone https://github.com/kli0n2323/proofside.git
 cd proofside
 python -m venv .venv
 # Linux/macOS: source .venv/bin/activate

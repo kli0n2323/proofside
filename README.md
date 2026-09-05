@@ -14,7 +14,7 @@ and a model never determines whether a proof succeeds.
 
 ## Quick start
 
-This Lean 4 fork supports Python 3.9–3.14 and a native Lean 4
+Proofside supports Python 3.9–3.14 and a native Lean 4
 toolchain; it does not require Java. Install Lean with
 [elan](https://lean-lang.org/install/manual/), then install this local fork:
 
@@ -30,7 +30,7 @@ not copy them into the current directory. Clone or download the repository when
 you want to run them:
 
 ```bash
-git clone https://github.com/EricSpencer00/proofside.git
+git clone https://github.com/kli0n2323/proofside.git
 cd proofside
 ```
 
