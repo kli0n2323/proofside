@@ -15,16 +15,25 @@ and a model never determines whether a proof succeeds.
 ## Quick start
 
 Proofside supports 64-bit Python 3.12–3.14 and requires a 64-bit Java 11+
-runtime. From a checkout:
+runtime. Install the published package from [PyPI](https://pypi.org/project/proofside/):
 
 ```bash
-python -m venv .venv
-# Linux/macOS: source .venv/bin/activate
-# Windows PowerShell: .venv\Scripts\Activate.ps1
-python -m pip install .
+pip install proofside
 ```
 
-Start with a reproducible model-free verification:
+Using `python -m pip install proofside` is equivalent and can make the selected
+Python interpreter explicit.
+
+The repository contains the runnable examples below; installing from PyPI does
+not copy them into the current directory. Clone or download the repository when
+you want to run them:
+
+```bash
+git clone https://github.com/kli0n2323/proofside.git
+cd proofside
+```
+
+Then start with a reproducible model-free verification:
 
 ```bash
 proofside check examples/sidecar/shot_budget_plain.py::allocate_remaining \
@@ -339,9 +348,10 @@ improves a downstream task, or that a policy transfers to hardware.
 
 ## Development
 
-See [`CONTRIBUTING.md`](CONTRIBUTING.md) for setup, tests, the code map, and
-design constraints. If Nagini cannot find Java—especially on Windows—set
-`JAVA_HOME` to the Java installation root.
+For checkout and editable-install contributor setup, see
+[`CONTRIBUTING.md`](CONTRIBUTING.md), along with tests, the code map, and design
+constraints. If Nagini cannot find Java—especially on Windows—set `JAVA_HOME`
+to the Java installation root.
 
 See [`ROADMAP.md`](ROADMAP.md) for suggested contribution directions.
 
