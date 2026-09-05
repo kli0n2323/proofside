@@ -5,8 +5,8 @@ without learning a framework or a large internal architecture.
 
 ## Development setup
 
-Use Python 3.9–3.14. On Python 3.12+, the default Nagini backend needs Java 11+
-and its pinned Python dependencies; Lean 4 is the optional native fallback:
+Use Python 3.9–3.14. Nagini remains the default verifier on Python 3.12+ and
+needs Java 11 or newer.
 
 ```bash
 git clone https://github.com/kli0n2323/proofside.git
@@ -17,8 +17,7 @@ python -m venv .venv
 python -m pip install -e .
 ```
 
-Install Lean through [elan](https://lean-lang.org/install/manual/) when working
-on the fallback; the project pins its native Lean version in `lean-toolchain`.
+If Nagini cannot find Java, set `JAVA_HOME` to the Java installation root.
 
 ## Tests
 
@@ -30,14 +29,14 @@ credential or running model:
 python -m unittest discover -s tests -v
 ```
 
-The default Nagini integration check needs Java 11+ and Python 3.12+:
+The default Nagini smoke check needs Java 11+ and Python 3.12+:
 
 ```bash
 proofside check examples/sidecar/shot_budget_plain.py::allocate_remaining \
   --contract examples/sidecar/shot_budget_contract.json --backend nagini
 ```
 
-The native Lean integration check is opt-in:
+The optional Lean integration suite needs the Lean toolchain:
 
 ```bash
 PROOFSIDE_RUN_LEAN=1 python -m unittest tests.test_integration -v
@@ -48,11 +47,10 @@ by it. Live model calls are not part of the automated suite.
 
 ## Code map
 
-- `proofside/cli.py` — selector/AST inspection, Nagini and Lean orchestration,
-  result classification, console rendering, and argument parsing.
+- `proofside/cli.py` — selector/AST inspection, Nagini orchestration, result
+  classification, console rendering, and argument parsing.
 - `proofside/contracts.py` — the closed contract IR, strict parsing and
-  validation, deterministic human rendering, and verifier dispatch.
-- `proofside/lean.py` — deliberately restricted Python-to-Lean lowering.
+  validation, deterministic human/Nagini rendering, and sidecar source creation.
 - `proofside/specification.py` — deterministic Proofside annotation extraction
   and marked-function discovery.
 - `proofside/proposal.py` — optional specification-source selection, model
@@ -63,24 +61,21 @@ by it. Live model calls are not part of the automated suite.
   later verification.
 - `proofside/batch.py` — shared marked-target discovery and thin independent
   `propose-all` / `check-all` orchestration.
-- `examples/` — workflow-organized sidecar, annotated,
+- `examples/` — workflow-organized sidecar, handwritten Nagini, annotated,
   research-inspired, and unsupported demonstrations.
-- `tests/` — fast Proofside-owned boundaries plus opt-in Lean integration
-  coverage; CI also checks Nagini with Java 17.
+- `tests/` — fast Proofside-owned boundaries and opt-in verifier integrations.
 
 ## Design constraints
 
 Please preserve these boundaries:
 
-- The selected verifier gets the final word on proof success. Nagini is the
-  default on Python 3.12+; Lean is an explicit or approved fallback for its
-  supported source subset.
+- The selected verifier gets the final word on proof success.
 - Declared specification and implementation are distinct; a function body is
   model context only when the user explicitly selects it.
 - Model proposal never verifies, accepts, or edits a contract automatically.
 - Acceptance records selection for verification but never performs verification.
 - Manual sidecars, handwritten Nagini contracts, and optional model proposals
-  are supported verification inputs.
+  are supported verification paths.
 - Model output and sidecar JSON are untrusted until strictly parsed and validated.
 - Batch commands orchestrate independent single-function pipelines; they do not
   create a batch contract or proof.
