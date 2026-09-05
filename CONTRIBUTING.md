@@ -30,11 +30,17 @@ credential or running model:
 python -m unittest discover -s tests -v
 ```
 
-The Lean integration check is:
+The default Nagini integration check needs Java 11+ and Python 3.12+:
 
 ```bash
 proofside check examples/sidecar/shot_budget_plain.py::allocate_remaining \
-  --contract examples/sidecar/shot_budget_contract.json
+  --contract examples/sidecar/shot_budget_contract.json --backend nagini
+```
+
+The native Lean integration check is opt-in:
+
+```bash
+PROOFSIDE_RUN_LEAN=1 python -m unittest tests.test_integration -v
 ```
 
 Before submitting a change, run the fast suite and any integration test affected
@@ -42,8 +48,8 @@ by it. Live model calls are not part of the automated suite.
 
 ## Code map
 
-- `proofside/cli.py` — selector/AST inspection, Lean orchestration, result
-  classification, console rendering, and argument parsing.
+- `proofside/cli.py` — selector/AST inspection, Nagini and Lean orchestration,
+  result classification, console rendering, and argument parsing.
 - `proofside/contracts.py` — the closed contract IR, strict parsing and
   validation, deterministic human rendering, and verifier dispatch.
 - `proofside/lean.py` — deliberately restricted Python-to-Lean lowering.
@@ -59,18 +65,22 @@ by it. Live model calls are not part of the automated suite.
   `propose-all` / `check-all` orchestration.
 - `examples/` — workflow-organized sidecar, annotated,
   research-inspired, and unsupported demonstrations.
-- `tests/` — fast Proofside-owned boundaries and Lean-lowering coverage.
+- `tests/` — fast Proofside-owned boundaries plus opt-in Lean integration
+  coverage; CI also checks Nagini with Java 17.
 
 ## Design constraints
 
 Please preserve these boundaries:
 
-- Lean gets the final word on proof success for the supported source subset.
+- The selected verifier gets the final word on proof success. Nagini is the
+  default on Python 3.12+; Lean is an explicit or approved fallback for its
+  supported source subset.
 - Declared specification and implementation are distinct; a function body is
   model context only when the user explicitly selects it.
 - Model proposal never verifies, accepts, or edits a contract automatically.
 - Acceptance records selection for verification but never performs verification.
-- Manual sidecars and optional model proposals are supported inputs to Lean.
+- Manual sidecars, handwritten Nagini contracts, and optional model proposals
+  are supported verification inputs.
 - Model output and sidecar JSON are untrusted until strictly parsed and validated.
 - Batch commands orchestrate independent single-function pipelines; they do not
   create a batch contract or proof.

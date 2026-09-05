@@ -20,11 +20,11 @@ run offers to install the native Lean 4 fallback through
 [elan](https://lean-lang.org/install/manual/):
 
 ```bash
-pip install -e .
+python -m pip install proofside
 ```
 
-Using `python -m pip install -e .` is equivalent and can make the selected
-Python interpreter explicit.
+For a checkout, use `python -m pip install -e .`. Using `python -m pip` can
+make the selected Python interpreter explicit.
 
 The repository contains the runnable examples below; installing from PyPI does
 not copy them into the current directory. Clone or download the repository when
@@ -71,7 +71,7 @@ Prefixing commands with `python -m proofside` is also supported.
 | Path | Purpose |
 | --- | --- |
 | `examples/sidecar/` | Model-free Proofside JSON contract workflow: good and bad implementations share one explicit contract. |
-| `examples/nagini/` | Legacy handwritten Nagini contracts; use the optional `nagini` extra and `--backend nagini`. |
+| `examples/nagini/` | Direct handwritten Nagini contracts. Proofside supports this path but does not parse Nagini annotations back into its IR. |
 | `examples/annotated/shot_budget_annotated.py` | Smallest annotation-first specification and proposal example. |
 | `examples/annotated/model_workflow_stress.py` | Eight-function model-assisted stress fixture with both matching and intentionally mismatched implementations. Its annotations are normative; bodies are withheld by default. |
 | `examples/research/` | Research-derived bookkeeping example with careful, limited provenance. |
@@ -175,16 +175,14 @@ existing accepted contract, and validation completes before replacement.
 
 No model is needed for either contract route. A manually authored JSON contract
 may be checked directly with `check --contract`; it does not have to pass through
-`accept`. Legacy handwritten Nagini annotations require the optional extra and
-explicit backend:
+`accept`. Advanced users may instead keep handwritten Nagini annotations in the
+function and select Nagini explicitly:
 
 ```bash
-pip install 'proofside[nagini]'
 proofside check examples/nagini/shot_budget_good.py::allocate_remaining --backend nagini
 ```
 
-Proofside does not parse handwritten Nagini annotations into its contract IR;
-they are outside the default Lean workflow.
+Proofside does not parse handwritten Nagini annotations into its contract IR.
 
 ## Specification sources
 
@@ -376,7 +374,7 @@ See [`ROADMAP.md`](ROADMAP.md) for suggested contribution directions.
 | Software | Version | License | Use here |
 | --- | --- | --- | --- |
 | [Nagini](https://github.com/marcoeilers/nagini) | 1.3.1 | MPL-2.0 | Default verifier on Python 3.12+ |
-| [Viper/Silicon](https://github.com/viperproject/silicon) | Bundled by Nagini | MIT | Default verification engine |
+| [Viper/Silicon](https://github.com/viperproject/silicon) | Bundled by Nagini | MPL-2.0 | Default verification engine |
 | [Lean](https://lean-lang.org/) | 4.33.1 | Apache-2.0 | Native theorem prover selected by `lean-toolchain` |
 
 Proofside depends on these projects but contains no copied or adapted
