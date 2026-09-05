@@ -4,7 +4,7 @@
 
 Proofside is a small formal-verification sidecar for typed mathematical Python.
 Declare the math a function is supposed to implement, review an explicit
-contract, then ask Nagini/Viper whether the implementation satisfies it.
+contract, then ask Lean 4 whether the supported implementation satisfies it.
 
 Proofside annotations keep equations and plain-language intent beside the code
 but separate from the implementation body. An optional model can translate that
@@ -14,14 +14,15 @@ and a model never determines whether a proof succeeds.
 
 ## Quick start
 
-Proofside supports 64-bit Python 3.12–3.14 and requires a 64-bit Java 11+
-runtime. Install the published package from [PyPI](https://pypi.org/project/proofside/):
+This Lean 4 fork supports 64-bit Python 3.12–3.14 and a native Lean 4
+toolchain; it does not require Java. Install Lean with
+[elan](https://lean-lang.org/install/manual/), then install this local fork:
 
 ```bash
-pip install proofside
+pip install -e .
 ```
 
-Using `python -m pip install proofside` is equivalent and can make the selected
+Using `python -m pip install -e .` is equivalent and can make the selected
 Python interpreter explicit.
 
 The repository contains the runnable examples below; installing from PyPI does
@@ -51,7 +52,11 @@ proofside check examples/sidecar/shot_budget_plain_bad.py::allocate_remaining \
   --contract examples/sidecar/shot_budget_contract.json
 ```
 
-Nagini reports `FAILED` because the extra `+ 1` prevents budget conservation.
+Lean reports `FAILED` because the extra `+ 1` prevents budget conservation.
+The first Lean backend deliberately supports typed integer functions with one
+straight-line `return` expression using names, integers, `+`, `-`, and `*`.
+Unsupported Python constructs are reported as `UNSUPPORTED`; they are never
+silently modeled as something else.
 Prefixing commands with `python -m proofside` is also supported.
 
 ## Examples
@@ -250,7 +255,7 @@ contract always wins over a candidate.
 
 ## What a result means
 
-- `VERIFIED`: Nagini/Viper discharged the displayed proof obligations.
+- `VERIFIED`: Lean 4 checked the generated theorem for the supported Python subset.
 - `FAILED`: one or more obligations were not proved. This does not by itself
   mean that a concrete counterexample was produced.
 - `UNSUPPORTED`: Proofside recognized input outside its deliberately narrow
@@ -262,7 +267,7 @@ contract always wins over a candidate.
 
 A successful run establishes that the selected implementation satisfies the
 displayed guarantees under the displayed assumptions, within the supported
-Nagini/Viper semantics. Preconditions remain obligations on callers.
+Python-to-Lean translation semantics. Preconditions remain obligations on callers.
 
 Formal verification does not establish that the contract captures the intended
 mathematics, that a scientific model corresponds to reality, that an algorithm
@@ -310,9 +315,9 @@ SciPy, or research frameworks.
 ## Trust and model transport
 
 Proofside strictly parses one closed contract representation, validates names
-against the selected function, and lowers accepted JSON deterministically to a
-temporary Nagini source. Nagini, Viper/Silicon, and Z3 perform formal
-verification. Temporary verifier sources are removed after each run.
+against the selected function, and lowers accepted JSON plus the supported
+Python function body deterministically to a temporary Lean theorem. Lean checks
+that theorem; temporary proof sources are removed after each run.
 
 Model output and annotation payloads are untrusted input. A model receives only
 the selected specification sources plus structural signature context:
@@ -350,8 +355,7 @@ improves a downstream task, or that a policy transfers to hardware.
 
 For checkout and editable-install contributor setup, see
 [`CONTRIBUTING.md`](CONTRIBUTING.md), along with tests, the code map, and design
-constraints. If Nagini cannot find Java—especially on Windows—set `JAVA_HOME`
-to the Java installation root.
+constraints. Install Lean 4 through `elan`; no Java runtime is required.
 
 See [`ROADMAP.md`](ROADMAP.md) for suggested contribution directions.
 
@@ -359,9 +363,7 @@ See [`ROADMAP.md`](ROADMAP.md) for suggested contribution directions.
 
 | Software | Version | License | Use here |
 | --- | --- | --- | --- |
-| [Nagini](https://github.com/marcoeilers/nagini) | 1.3.1 | MPL-2.0 | Direct pinned verification dependency |
-| [Viper/Silicon](https://github.com/viperproject/silicon) | Bundled by Nagini 1.3.1 | MPL-2.0 | Verification backend used through Nagini |
-| [Z3](https://github.com/Z3Prover/z3) | 4.8.7.0 on common x64 platforms | MIT | Solver installed transitively by Nagini |
+| [Lean](https://lean-lang.org/) | 4.33.1 | Apache-2.0 | Native theorem prover selected by `lean-toolchain` |
 
 Proofside depends on these projects but contains no copied or adapted
 third-party source. Python and Java are execution prerequisites distributed

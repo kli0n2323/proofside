@@ -165,7 +165,7 @@ class AcceptanceTests(unittest.TestCase):
             verified = CheckResult(Status.VERIFIED, "proved")
 
             with patch("proofside.cli.run_nagini", return_value=verified):
-                result = check(f"{source_path}::remaining", contract_path)
+                result = check(f"{source_path}::remaining", contract_path, backend="nagini")
 
             self.assertEqual(result.status, Status.VERIFIED)
 
