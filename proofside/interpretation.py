@@ -3,7 +3,11 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from .contracts import ContractError, parse_contract
+from .contracts import (
+    ContractError,
+    parse_contract,
+    validate_contract_without_parameters,
+)
 from .proposal import (
     ProposalError,
     request_model,
@@ -62,7 +66,8 @@ def interpret_contract(
             f"malformed contract JSON at line {error.lineno}: {error.msg}"
         ) from error
     try:
-        parse_contract(contract_data)
+        contract = parse_contract(contract_data)
+        validate_contract_without_parameters(contract)
     except ContractError as error:
         raise InterpretationError(f"invalid Proofside contract: {error}") from error
 
@@ -80,12 +85,11 @@ def interpret_contract(
 
 def render_interpretation_output(interpretation: str) -> str:
     return (
-        "INDEPENDENT MODEL INTERPRETATION — NOT A CORRECTNESS CHECK\n\n"
+        "BLIND MODEL INTERPRETATION — NOT A CORRECTNESS CHECK\n\n"
         f"{interpretation}\n\n"
         "Review boundary\n"
-        "- The model received the contract only.\n"
-        "- It did not receive the original Proofside equation/intent or "
-        "implementation.\n"
+        "- The model received only the contract and generic Proofside IR "
+        "semantics, not the original specification or implementation.\n"
         "- This interpretation may help expose specification mistakes.\n"
         "- Agreement with the user's intended meaning does not prove the contract "
         "is correct or complete.\n"

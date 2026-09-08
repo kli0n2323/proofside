@@ -214,9 +214,9 @@ def load_contract(path: Path) -> Contract:
     return parse_contract(data)
 
 
-def _validate_value(value: Value, parameters: set[str], allow_result: bool) -> None:
+def _validate_value(value: Value, parameters: set[str] | None, allow_result: bool) -> None:
     if isinstance(value, Variable):
-        if value.name not in parameters:
+        if parameters is not None and value.name not in parameters:
             raise ContractError(f"contract references nonexistent parameter: {value.name}")
     elif isinstance(value, Integer):
         return
@@ -232,7 +232,7 @@ def _validate_value(value: Value, parameters: set[str], allow_result: bool) -> N
         raise ContractError(f"unsupported contract value: {type(value).__name__}")
 
 
-def _validate_formula(formula: Formula, parameters: set[str], allow_result: bool) -> None:
+def _validate_formula(formula: Formula, parameters: set[str] | None, allow_result: bool) -> None:
     if isinstance(formula, Comparison):
         _validate_value(formula.left, parameters, allow_result)
         _validate_value(formula.right, parameters, allow_result)
@@ -248,11 +248,19 @@ def _validate_formula(formula: Formula, parameters: set[str], allow_result: bool
         raise ContractError(f"unsupported contract formula: {type(formula).__name__}")
 
 
-def validate_contract(contract: Contract, parameters: set[str]) -> None:
+def _validate_contract(contract: Contract, parameters: set[str] | None) -> None:
     for formula in contract.requires:
         _validate_formula(formula, parameters, False)
     for formula in contract.ensures:
         _validate_formula(formula, parameters, True)
+
+
+def validate_contract(contract: Contract, parameters: set[str]) -> None:
+    _validate_contract(contract, parameters)
+
+
+def validate_contract_without_parameters(contract: Contract) -> None:
+    _validate_contract(contract, None)
 
 
 def _render_value(value: Value, result_text: str, parent_precedence: int = 0) -> str:
