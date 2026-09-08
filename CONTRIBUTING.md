@@ -46,14 +46,17 @@ by it. Live model calls are not part of the automated suite.
 
 ## Code map
 
-- `proofside/cli.py` — selector/AST inspection, Nagini orchestration, result
-  classification, console rendering, and argument parsing.
+- `proofside/cli.py` — command-line parsing, dispatch, and console rendering.
+- `proofside/targets.py` — selector parsing and typed top-level function loading.
+- `proofside/verification.py` — Nagini orchestration and result classification.
 - `proofside/contracts.py` — the closed contract IR, strict parsing and
   validation, deterministic human/Nagini rendering, and sidecar source creation.
 - `proofside/specification.py` — deterministic Proofside annotation extraction
   and marked-function discovery.
 - `proofside/proposal.py` — optional specification-source selection, model
-  prompting, secure HTTP transport, validation, and candidate creation.
+  prompting, validation, and candidate creation.
+- `proofside/model.py` — shared secure model endpoint, credential, and HTTP
+  transport behavior.
 - `proofside/artifacts.py` — deterministic source-adjacent candidate and accepted
   contract paths.
 - `proofside/acceptance.py` — explicit candidate validation and acceptance for

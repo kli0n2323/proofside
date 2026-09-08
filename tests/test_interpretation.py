@@ -11,7 +11,7 @@ from proofside.interpretation import (
     InterpretationError,
     interpret_contract,
 )
-from proofside.proposal import LOCAL_BASE_URL, ProposalError
+from proofside.model import LOCAL_BASE_URL, ProposalError
 
 
 VALID_CONTRACT = {
@@ -201,7 +201,7 @@ class InterpretationTests(unittest.TestCase):
                     "proofside.interpretation.request_model",
                     return_value="Assume value is nonnegative; return value unchanged.",
                 ),
-                patch("proofside.cli.run_nagini") as run_nagini,
+                patch("proofside.verification.run_nagini") as run_nagini,
                 contextlib.redirect_stdout(output),
             ):
                 exit_code = main(

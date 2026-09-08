@@ -160,7 +160,7 @@ class BatchProposalTests(unittest.TestCase):
             with (
                 patch("proofside.proposal.request_model", side_effect=respond) as request_model,
                 patch("proofside.batch.check") as check,
-                patch("proofside.cli.run_nagini") as run_nagini,
+                patch("proofside.verification.run_nagini") as run_nagini,
                 patch("proofside.acceptance.accept_contract") as accept,
             ):
                 results, errors = run_batch_proposals((path,), "local", "model")

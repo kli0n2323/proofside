@@ -11,15 +11,17 @@ from urllib.request import BaseHandler, build_opener
 from urllib.response import addinfourl
 
 from proofside.cli import main
-from proofside.proposal import (
+from proofside.model import (
     API_BASE_URL,
     LOCAL_BASE_URL,
     NoRedirectHandler,
     ProposalError,
+    request_model,
+)
+from proofside.proposal import (
     build_proposal_prompt,
     propose_contract,
     render_proposal_output,
-    request_model,
     select_specification_sources,
 )
 
@@ -131,7 +133,7 @@ class ConnectionTests(unittest.TestCase):
 
     def test_api_request_has_auth_model_and_prompt(self) -> None:
         endpoint_response = {"choices": [{"message": {"content": "{}"}}]}
-        with patch("proofside.proposal._MODEL_OPENER.open", return_value=FakeResponse(endpoint_response)) as mocked:
+        with patch("proofside.model._MODEL_OPENER.open", return_value=FakeResponse(endpoint_response)) as mocked:
             self.assertEqual(
                 request_model(API_BASE_URL, "explicit-model", "contract prompt", "secret"),
                 "{}",
@@ -147,7 +149,7 @@ class ConnectionTests(unittest.TestCase):
 
     def test_local_mode_defaults_to_unauthenticated_ollama_url(self) -> None:
         endpoint_response = {"choices": [{"message": {"content": "{}"}}]}
-        with patch("proofside.proposal._MODEL_OPENER.open", return_value=FakeResponse(endpoint_response)) as mocked:
+        with patch("proofside.model._MODEL_OPENER.open", return_value=FakeResponse(endpoint_response)) as mocked:
             request_model(LOCAL_BASE_URL, "local-model", "prompt", None)
         request = mocked.call_args.args[0]
         self.assertEqual(request.full_url, "http://localhost:11434/v1/chat/completions")
@@ -155,7 +157,7 @@ class ConnectionTests(unittest.TestCase):
 
     def test_local_base_url_can_be_overridden(self) -> None:
         endpoint_response = {"choices": [{"message": {"content": "{}"}}]}
-        with patch("proofside.proposal._MODEL_OPENER.open", return_value=FakeResponse(endpoint_response)) as mocked:
+        with patch("proofside.model._MODEL_OPENER.open", return_value=FakeResponse(endpoint_response)) as mocked:
             request_model("http://127.0.0.1:9000/v1", "model", "prompt", None)
         self.assertEqual(
             mocked.call_args.args[0].full_url,
@@ -163,7 +165,7 @@ class ConnectionTests(unittest.TestCase):
         )
 
     def test_malformed_endpoint_response_fails_clearly(self) -> None:
-        with patch("proofside.proposal._MODEL_OPENER.open", return_value=FakeResponse({"choices": []})):
+        with patch("proofside.model._MODEL_OPENER.open", return_value=FakeResponse({"choices": []})):
             with self.assertRaisesRegex(ProposalError, "unexpected response shape"):
                 request_model(LOCAL_BASE_URL, "model", "prompt", None)
 
@@ -172,7 +174,7 @@ class ConnectionTests(unittest.TestCase):
             with self.subTest(status=status):
                 handler = RedirectingHTTPSHandler(status)
                 opener = build_opener(handler, NoRedirectHandler())
-                with patch("proofside.proposal._MODEL_OPENER", opener):
+                with patch("proofside.model._MODEL_OPENER", opener):
                     with self.assertRaises(ProposalError) as raised:
                         request_model(
                             "https://provider.example/v1",
@@ -505,7 +507,7 @@ class ProposalTests(unittest.TestCase):
             selector = f"{source_path}::allocate"
             with (
                 patch("proofside.proposal.request_model", return_value=json.dumps(VALID_CONTRACT)),
-                patch("proofside.cli.run_nagini") as run_nagini,
+                patch("proofside.verification.run_nagini") as run_nagini,
             ):
                 contract_text, sources = propose_contract(
                     selector,
@@ -691,8 +693,8 @@ class ProposalTests(unittest.TestCase):
             output_path = Path(directory, "candidate.json")
             with (
                 patch.dict(os.environ, {"OPENAI_API_KEY": "api-secret"}, clear=True),
-                patch("proofside.proposal._MODEL_OPENER.open", return_value=FakeResponse(endpoint_response)) as mocked,
-                patch("proofside.cli.run_nagini") as run_nagini,
+                patch("proofside.model._MODEL_OPENER.open", return_value=FakeResponse(endpoint_response)) as mocked,
+                patch("proofside.verification.run_nagini") as run_nagini,
                 patch("sys.stdout", new_callable=io.StringIO) as stdout,
             ):
                 exit_code = main(
@@ -751,7 +753,7 @@ class ProposalTests(unittest.TestCase):
                     clear=True,
                 ),
                 patch(
-                    "proofside.proposal._MODEL_OPENER.open",
+                    "proofside.model._MODEL_OPENER.open",
                     return_value=FakeResponse(endpoint_response),
                 ) as open_request,
                 patch("sys.stdout", new_callable=io.StringIO),

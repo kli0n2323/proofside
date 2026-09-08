@@ -7,13 +7,14 @@ from pathlib import Path
 import tokenize
 
 from .artifacts import accepted_contract_path, candidate_contract_path
-from .cli import CheckResult, Status, check
 from .proposal import ProposalError, propose_contract
 from .specification import (
     SpecificationAnnotationError,
     marked_functions_in_source,
     specification_annotations_for_function,
 )
+from .targets import CheckResult, Status
+from .verification import check
 
 
 @dataclass(frozen=True)

@@ -58,7 +58,7 @@ class AcceptanceTests(unittest.TestCase):
             accepted_path = accepted_contract_path(source_path, "remaining")
             with (
                 patch("proofside.proposal.request_model") as request_model,
-                patch("proofside.cli.run_nagini") as run_nagini,
+                patch("proofside.verification.run_nagini") as run_nagini,
                 patch("sys.stdout", new_callable=io.StringIO) as stdout,
             ):
                 exit_code = main(["accept", selector])
@@ -164,7 +164,7 @@ class AcceptanceTests(unittest.TestCase):
             write_candidate(contract_path)
             verified = CheckResult(Status.VERIFIED, "proved")
 
-            with patch("proofside.cli.run_nagini", return_value=verified):
+            with patch("proofside.verification.run_nagini", return_value=verified):
                 result = check(f"{source_path}::remaining", contract_path)
 
             self.assertEqual(result.status, Status.VERIFIED)

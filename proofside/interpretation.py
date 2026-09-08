@@ -8,7 +8,7 @@ from .contracts import (
     parse_contract,
     validate_contract_without_parameters,
 )
-from .proposal import (
+from .model import (
     ProposalError,
     request_model,
     resolve_model_endpoint_and_key,

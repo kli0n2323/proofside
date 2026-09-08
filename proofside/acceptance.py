@@ -4,8 +4,8 @@ import json
 from pathlib import Path
 
 from .artifacts import accepted_contract_path, candidate_contract_path
-from .cli import CheckResult, _function_arguments, load_target, parse_selector
 from .contracts import ContractError, parse_contract, render_human, validate_contract
+from .targets import CheckResult, function_arguments, load_target, parse_selector
 
 
 class AcceptanceError(ValueError):
@@ -43,7 +43,7 @@ def accept_contract(
         ) from error
     try:
         contract = parse_contract(data)
-        parameters = {argument.arg for argument in _function_arguments(function)}
+        parameters = {argument.arg for argument in function_arguments(function)}
         validate_contract(contract, parameters)
     except ContractError as error:
         raise AcceptanceError(f"invalid candidate contract: {error}") from error

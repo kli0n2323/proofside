@@ -92,7 +92,7 @@ class ClassificationTests(unittest.TestCase):
         self.assertEqual(result.status, Status.ERROR)
 
     def test_reports_missing_nagini_as_error(self) -> None:
-        with patch("proofside.cli.shutil.which", return_value=None):
+        with patch("proofside.verification.shutil.which", return_value=None):
             result = check("examples/nagini/shot_budget_good.py::allocate_remaining")
         self.assertEqual(result.status, Status.ERROR)
         self.assertIn("executable not found", result.detail)
