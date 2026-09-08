@@ -328,6 +328,30 @@ def main(argv: list[str] | None = None) -> int:
         choices=("equation", "intent", "implementation"),
         help="repeatable specification source; defaults per function to equation/intent annotations",
     )
+    interpret_parser = subparsers.add_parser(
+        "interpret",
+        help="ask a model to explain one contract without source context",
+        description=(
+            "Ask an explicitly selected model for a blind, contract-only explanation. "
+            "This is not a correctness check and never runs verification."
+        ),
+    )
+    interpret_parser.add_argument("contract", type=Path, help="Proofside contract JSON path")
+    interpret_parser.add_argument(
+        "--model-source",
+        choices=("api", "local"),
+        required=True,
+        help="api sends the contract remotely; local sends it to the chosen local endpoint",
+    )
+    interpret_parser.add_argument("--model", required=True, help="explicit model name")
+    interpret_parser.add_argument(
+        "--base-url",
+        help="OpenAI-compatible base URL; API is remote and local defaults to localhost",
+    )
+    interpret_parser.add_argument(
+        "--api-key-env",
+        help="credential environment-variable name required for a custom API base URL",
+    )
     accept_parser = subparsers.add_parser(
         "accept",
         help="explicitly accept a candidate contract for later verification",
@@ -396,6 +420,28 @@ def main(argv: list[str] | None = None) -> int:
             print(error)
             return 1
         print(render_acceptance_output(contract_text, candidate_path, accepted_path))
+        return 0
+
+    if arguments.command == "interpret":
+        from .interpretation import (
+            InterpretationError,
+            interpret_contract,
+            render_interpretation_output,
+        )
+
+        try:
+            interpretation = interpret_contract(
+                arguments.contract,
+                arguments.model_source,
+                arguments.model,
+                arguments.base_url,
+                arguments.api_key_env,
+            )
+        except InterpretationError as error:
+            print("INTERPRETATION FAILED")
+            print(error)
+            return 1
+        print(render_interpretation_output(interpretation))
         return 0
 
     from .proposal import ProposalError, propose_contract, render_proposal_output

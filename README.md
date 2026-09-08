@@ -97,6 +97,9 @@ roles.
               candidate contract
                NOT VERIFIED
                      ↓
+       optional blind interpretation
+          contract-only model view
+                     ↓
               human review/edit
                      ↓
               accepted contract ─────────┐
@@ -133,8 +136,26 @@ examples/annotated/.proofside/shot_budget_annotated.allocate_remaining.candidate
 ```
 
 The response must be exact JSON. Proofside strictly parses and structurally
-validates it, but labels it `PROPOSED — NOT VERIFIED`. Review or edit that file,
-then record the explicit choice to submit it for verification:
+validates it, but labels it `PROPOSED — NOT VERIFIED`. After inspecting or
+editing that file, you may ask a model for a blind interpretation:
+
+```bash
+proofside interpret \
+  examples/annotated/.proofside/shot_budget_annotated.allocate_remaining.candidate.json \
+  --model-source api \
+  --model MODEL_NAME
+```
+
+`interpret` is an optional blind review aid for model-generated or
+human-authored contracts. The interpreter receives only the contract and the
+generic closed-IR semantics—not the original equation, intent, implementation,
+or source file. For a model-generated contract, consider a different model or
+model family when practical for a more independent review signal. Agreement
+between models is not evidence that the contract is correct or complete; the
+human remains responsible for deciding whether to accept the specification.
+
+After review, record the explicit choice to submit the contract for
+verification:
 
 ```bash
 proofside accept examples/annotated/shot_budget_annotated.py::allocate_remaining
@@ -314,8 +335,10 @@ against the selected function, and lowers accepted JSON deterministically to a
 temporary Nagini source. Nagini, Viper/Silicon, and Z3 perform formal
 verification. Temporary verifier sources are removed after each run.
 
-Model output and annotation payloads are untrusted input. A model receives only
-the selected specification sources plus structural signature context:
+Model output and annotation payloads are untrusted input. During proposal, a
+model receives only the selected specification sources plus structural
+signature context. During blind interpretation, it receives only the contract
+and generic contract-IR semantics:
 
 - API mode sends that context remotely. The default OpenAI endpoint alone reads
   `OPENAI_API_KEY` implicitly.
