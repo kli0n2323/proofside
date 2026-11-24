@@ -9,43 +9,45 @@ from proofside.batch import render_batch_output, run_batch_checks
 from proofside.cli import Status, check
 
 
-@unittest.skipUnless(
-    os.environ.get("PROOFSIDE_RUN_NAGINI") == "1",
-    "set PROOFSIDE_RUN_NAGINI=1 to run Nagini integration tests",
-)
-class SidecarIntegrationTests(unittest.TestCase):
+class SidecarCases:
+    backend = "nagini"
+    failure_marker = "Postcondition"
+    conservation_parameter = "total_shots"
     contract_path = Path("examples/sidecar/shot_budget_contract.json")
+
+    def check(self, selector, contract_path):
+        return check(selector, contract_path, backend=self.backend)
 
     def test_sidecar_good_verifies_without_modifying_source(self) -> None:
         path = Path("examples/sidecar/shot_budget_plain.py")
         original_bytes = path.read_bytes()
-        result = check(f"{path}::allocate_remaining", self.contract_path)
-        self.assertEqual(result.status, Status.VERIFIED)
+        result = self.check(f"{path}::allocate_remaining", self.contract_path)
+        self.assertEqual(result.status, Status.VERIFIED, result.detail)
         self.assertEqual(path.read_bytes(), original_bytes)
 
     def test_sidecar_bad_fails(self) -> None:
-        result = check(
+        result = self.check(
             "examples/sidecar/shot_budget_plain_bad.py::allocate_remaining",
             self.contract_path,
         )
-        self.assertEqual(result.status, Status.FAILED)
-        self.assertIn("Postcondition", result.detail)
+        self.assertEqual(result.status, Status.FAILED, result.detail)
+        self.assertIn(self.failure_marker, result.detail)
 
     def test_research_shot_budget_verifies(self) -> None:
-        result = check(
+        result = self.check(
             "examples/research/research_shot_budget.py::remaining_feature_shots",
             Path("examples/research/research_shot_budget_contract.json"),
         )
-        self.assertEqual(result.status, Status.VERIFIED)
+        self.assertEqual(result.status, Status.VERIFIED, result.detail)
 
     def test_broken_research_shot_budget_fails_conservation(self) -> None:
-        result = check(
+        result = self.check(
             "examples/research/research_shot_budget_bad.py::remaining_feature_shots",
             Path("examples/research/research_shot_budget_contract.json"),
         )
-        self.assertEqual(result.status, Status.FAILED)
-        self.assertIn("Postcondition", result.detail)
-        self.assertIn("total_shots", result.detail)
+        self.assertEqual(result.status, Status.FAILED, result.detail)
+        self.assertIn(self.failure_marker, result.detail)
+        self.assertIn(self.conservation_parameter, result.detail)
 
     def test_batch_runs_independent_real_verifications(self) -> None:
         source = (
@@ -75,7 +77,7 @@ class SidecarIntegrationTests(unittest.TestCase):
                 contract_path.parent.mkdir(exist_ok=True)
                 contract_path.write_text(json.dumps(contract), encoding="utf-8")
 
-            results, errors = run_batch_checks((source_path,))
+            results, errors = run_batch_checks((source_path,), backend=self.backend)
 
         self.assertEqual(errors, ())
         self.assertEqual([item.result.status for item in results], [Status.VERIFIED, Status.FAILED])
@@ -120,12 +122,12 @@ class SidecarIntegrationTests(unittest.TestCase):
             good_path.write_text(good_source, encoding="utf-8")
             bad_path.write_text(bad_source, encoding="utf-8")
 
-            good = check(f"{good_path}::nonnegative_part", contract_path)
-            bad = check(f"{bad_path}::nonnegative_part", contract_path)
+            good = self.check(f"{good_path}::nonnegative_part", contract_path)
+            bad = self.check(f"{bad_path}::nonnegative_part", contract_path)
 
-        self.assertEqual(good.status, Status.VERIFIED)
-        self.assertEqual(bad.status, Status.FAILED)
-        self.assertIn("Postcondition", bad.detail)
+        self.assertEqual(good.status, Status.VERIFIED, good.detail)
+        self.assertEqual(bad.status, Status.FAILED, bad.detail)
+        self.assertIn(self.failure_marker, bad.detail)
 
     def test_linear_arithmetic_and_boolean_formulas_verify(self) -> None:
         source = (
@@ -168,9 +170,17 @@ class SidecarIntegrationTests(unittest.TestCase):
             contract_path = Path(directory, "linear.json")
             source_path.write_text(source, encoding="utf-8")
             contract_path.write_text(json.dumps(contract), encoding="utf-8")
-            result = check(f"{source_path}::linear", contract_path)
+            result = self.check(f"{source_path}::linear", contract_path)
 
-        self.assertEqual(result.status, Status.VERIFIED)
+        self.assertEqual(result.status, Status.VERIFIED, result.detail)
+
+
+@unittest.skipUnless(
+    os.environ.get("PROOFSIDE_RUN_NAGINI") == "1",
+    "set PROOFSIDE_RUN_NAGINI=1 to run Nagini integration tests",
+)
+class SidecarIntegrationTests(SidecarCases, unittest.TestCase):
+    pass
 
 
 if __name__ == "__main__":

@@ -5,7 +5,7 @@ without learning a framework or a large internal architecture.
 
 ## Development setup
 
-Use 64-bit Python 3.12–3.14 and Java 11 or newer:
+Use 64-bit Python 3.12–3.14. Java 11 or newer is needed for Nagini integration:
 
 ```bash
 git clone https://github.com/kli0n2323/proofside.git
@@ -44,11 +44,17 @@ python -m unittest tests.test_integration -v
 Before submitting a change, run the fast suite and any integration test affected
 by it. Live model calls are not part of the automated suite.
 
+The Lean integration suite uses the same sidecar cases plus Lean-specific
+regressions. Install the native toolchain as described in the README and run
+`PROOFSIDE_RUN_LEAN=1 python -m unittest tests.test_lean -v`. In PowerShell,
+set `$env:PROOFSIDE_RUN_LEAN = "1"` before running the Python command.
+
 ## Code map
 
 - `proofside/cli.py` — command-line parsing, dispatch, and console rendering.
 - `proofside/targets.py` — selector parsing and typed top-level function loading.
-- `proofside/verification.py` — Nagini orchestration and result classification.
+- `proofside/verification.py` — verification dispatch and Nagini orchestration.
+- `proofside/lean.py` — restricted Python/contract lowering and native Lean verification.
 - `proofside/contracts.py` — the closed contract IR, strict parsing and
   validation, deterministic human/Nagini rendering, and sidecar source creation.
 - `proofside/specification.py` — deterministic Proofside annotation extraction
@@ -57,6 +63,8 @@ by it. Live model calls are not part of the automated suite.
   prompting, validation, and candidate creation.
 - `proofside/model.py` — shared secure model endpoint, credential, and HTTP
   transport behavior.
+- `proofside/interpretation.py` — blind explanation of validated contract IR,
+  with no original specification or source context.
 - `proofside/artifacts.py` — deterministic source-adjacent candidate and accepted
   contract paths.
 - `proofside/acceptance.py` — explicit candidate validation and acceptance for
@@ -71,13 +79,15 @@ by it. Live model calls are not part of the automated suite.
 
 Please preserve these boundaries:
 
-- Nagini/Viper gets the final word on proof success.
+- The selected formal verifier gets the final word on proof success.
+- Changes to Lean lowering must preserve Python semantics for every supported
+  execution path. Reject constructs that cannot be lowered faithfully.
 - Declared specification and implementation are distinct; a function body is
   model context only when the user explicitly selects it.
 - Model proposal never verifies, accepts, or edits a contract automatically.
 - Acceptance records selection for verification but never performs verification.
 - Manual sidecars, handwritten Nagini contracts, and optional model proposals
-  are all supported paths to the same verifier.
+  are supported paths. Handwritten Nagini contracts require Nagini.
 - Model output and sidecar JSON are untrusted until strictly parsed and validated.
 - Batch commands orchestrate independent single-function pipelines; they do not
   create a batch contract or proof.

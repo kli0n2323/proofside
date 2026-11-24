@@ -12,6 +12,7 @@ from .contracts import (
     render_human,
     validate_contract,
 )
+from .lean import run_lean
 from .targets import CheckResult, Status, function_arguments, load_target, parse_selector
 
 
@@ -54,18 +55,24 @@ def run_nagini(file_path: Path, function_name: str) -> CheckResult:
     return classify_nagini(completed.returncode, completed.stdout, completed.stderr)
 
 
-def check(selector: str, contract_path: Path | None = None) -> CheckResult:
+def check(selector: str, contract_path: Path | None = None, backend: str = "nagini") -> CheckResult:
+    if backend not in {"nagini", "lean"}:
+        return CheckResult(Status.ERROR, f"unknown verification backend: {backend}")
     try:
         file_path, function_name = parse_selector(selector)
     except ValueError as error:
         return CheckResult(Status.ERROR, str(error))
 
-    target = load_target(file_path, function_name, require_inline_contract=contract_path is None)
+    target = load_target(
+        file_path, function_name, require_inline_contract=backend == "nagini" and contract_path is None
+    )
     if isinstance(target, CheckResult):
         return target
     source, function = target
 
     if contract_path is None:
+        if backend == "lean":
+            return CheckResult(Status.UNSUPPORTED, "Lean 4 requires a Proofside JSON sidecar contract")
         return run_nagini(file_path, function_name)
 
     try:
@@ -73,6 +80,14 @@ def check(selector: str, contract_path: Path | None = None) -> CheckResult:
         parameters = {argument.arg for argument in function_arguments(function)}
         validate_contract(contract, parameters)
         contract_text = render_human(contract)
+        if backend == "lean":
+            # ast.parse alone accepts some Python that cannot be compiled.
+            try:
+                compile(source, str(file_path), "exec")
+            except SyntaxError as error:
+                return CheckResult(Status.UNSUPPORTED, f"Lean 4: invalid Python source: {error.msg}")
+            result = run_lean(function, contract)
+            return CheckResult(result.status, result.detail, contract_text, backend="lean")
         annotated_source = build_annotated_source(source, function, contract)
     except ContractError as error:
         return CheckResult(Status.ERROR, f"invalid contract: {error}")

@@ -19,13 +19,13 @@ where possible and must not contain private or proprietary research code.
 Possible improvements include clearer verifier and setup diagnostics, small CLI
 ergonomics changes grounded in actual user friction, and better links from
 verifier diagnostics to user-visible contracts or source where this can be done
-without misrepresenting Nagini. The distinction among `VERIFIED`, `FAILED`,
+without misrepresenting the selected verifier. The distinction among `VERIFIED`, `FAILED`,
 `UNSUPPORTED`, and `ERROR` must remain explicit.
 
 ### Portability and testing
 
 Useful work includes exercising supported Python, Java, and platform
-combinations; reproducing and documenting Java or Nagini environment issues;
+combinations; reproducing and documenting Nagini or native Lean setup issues;
 focused regression and integration coverage; and packaging improvements that
 do not enlarge the trusted core.
 
@@ -41,7 +41,7 @@ source preservation changes the verification boundary.
 The current deliberate boundary is roughly quantifier-free propositional linear
 integer arithmetic. New contract constructs should be motivated by concrete
 current use cases while preserving the closed structured IR, strict parsing,
-deterministic human rendering, deterministic Nagini lowering, and human
+deterministic human rendering, deterministic verifier lowering, and human
 inspectability. This roadmap does not promise particular new syntax.
 
 ### Floating-point analysis

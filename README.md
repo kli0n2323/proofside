@@ -4,7 +4,7 @@
 
 Proofside is a small formal-verification sidecar for typed mathematical Python.
 Declare the math a function is supposed to implement, review an explicit
-contract, then ask Nagini/Viper whether the implementation satisfies it.
+contract, then check the implementation with Nagini/Viper or Lean 4.
 
 Proofside annotations keep equations and plain-language intent beside the code
 but separate from the implementation body. An optional model can translate that
@@ -14,8 +14,9 @@ and a model never determines whether a proof succeeds.
 
 ## Quick start
 
-Proofside supports 64-bit Python 3.12–3.14 and requires a 64-bit Java 11+
-runtime. Install the published package from [PyPI](https://pypi.org/project/proofside/):
+Proofside supports 64-bit Python 3.12–3.14. The default Nagini backend requires
+a 64-bit Java 11+ runtime. The optional Lean backend runs without Java.
+Install the package from [PyPI](https://pypi.org/project/proofside/):
 
 ```bash
 pip install proofside
@@ -53,6 +54,24 @@ proofside check examples/sidecar/shot_budget_plain_bad.py::allocate_remaining \
 
 Nagini reports `FAILED` because the extra `+ 1` prevents budget conservation.
 Prefixing commands with `python -m proofside` is also supported.
+
+### Use Lean 4
+
+Install the [Lean 4.33.1 native distribution](https://github.com/leanprover/lean4/releases/tag/v4.33.1)
+for your platform. Put its native `bin` directory on `PATH` or set
+`PROOFSIDE_LEAN` to the full path to its `bin/lean` (`bin/lean.exe` on Windows).
+With Elan, install the toolchain separately and point `PROOFSIDE_LEAN` at the
+binary inside that installed toolchain. Proofside does not run Elan proxies,
+install tooling, or switch backends when verification fails.
+
+```bash
+proofside check examples/sidecar/shot_budget_plain.py::allocate_remaining \
+  --contract examples/sidecar/shot_budget_contract.json --backend lean
+```
+
+`proofside check-all TARGET --backend lean` selects Lean for every function in
+the batch. Omit the flag or use `--backend nagini` to select Nagini/Viper.
+Both backends use the same Python version range and package installation.
 
 ## Examples
 
@@ -112,14 +131,13 @@ manually authored JSON contract ─────────┘
                      ↓
        deterministic Proofside lowering
                      ↓
-            Nagini / Viper / Z3
+             Nagini/Viper or Lean
                      ↓
      VERIFIED / FAILED / UNSUPPORTED / ERROR
 ```
 
 Handwritten Nagini contracts provide a lower-level route directly to Nagini.
-In every route, Nagini/Viper—not a model—decides whether proof obligations are
-discharged.
+The selected formal verifier decides whether proof obligations are discharged.
 
 To ask an explicitly selected model for a candidate:
 
@@ -271,7 +289,7 @@ contract always wins over a candidate.
 
 ## What a result means
 
-- `VERIFIED`: Nagini/Viper discharged the displayed proof obligations.
+- `VERIFIED`: the selected verifier discharged the displayed proof obligations.
 - `FAILED`: one or more obligations were not proved. This does not by itself
   mean that a concrete counterexample was produced.
 - `UNSUPPORTED`: Proofside recognized input outside its deliberately narrow
@@ -282,8 +300,8 @@ contract always wins over a candidate.
 `UNSUPPORTED` and `ERROR` do not imply that verification occurred.
 
 A successful run establishes that the selected implementation satisfies the
-displayed guarantees under the displayed assumptions, within the supported
-Nagini/Viper semantics. Preconditions remain obligations on callers.
+displayed guarantees under the displayed assumptions and the selected
+backend's supported semantics. Preconditions remain obligations on callers.
 
 Formal verification does not establish that the contract captures the intended
 mathematics, that a scientific model corresponds to reality, that an algorithm
@@ -320,20 +338,35 @@ It contains no raw Python or Nagini snippets.
 
 Proofside currently selects top-level synchronous functions with complete
 parameter and return annotations. Decorated, async, nested, ambiguous, or
-untyped targets are rejected. Sidecar mode also rejects function docstrings and
-one-line bodies.
+untyped targets are rejected. Nagini sidecar mode also rejects function
+docstrings and one-line bodies.
 
 The selected function must be self-contained. Sidecar source generation does
 not preserve arbitrary imports, helpers, closures, comments, or module state.
 Proofside does not provide verification semantics for arbitrary Python, NumPy,
 SciPy, or research frameworks.
 
+Nagini supports handwritten contracts and JSON sidecars. Lean has a narrower
+implementation subset and accepts only JSON sidecars with at least one
+postcondition. It models built-in Python integers as unbounded signed integers.
+It supports integer inputs and return values, simple local assignment and
+reassignment, explicit `if`/`else`, and integer arithmetic with literal scaling.
+Conditions may combine single integer comparisons with `and`, `or`, and `not`.
+Every branch must return an integer, possibly through a shared continuation.
+Calls, loops, mutation of objects, default and keyword-only parameters,
+variadics, and generic signatures are outside this subset. Diagnostics may
+refer to generated Lean names such as `psArg0` for the first parameter.
+Lean lowering also bounds branch expansion before invoking the prover.
+
 ## Trust and model transport
 
 Proofside strictly parses one closed contract representation, validates names
 against the selected function, and lowers accepted JSON deterministically to a
-temporary Nagini source. Nagini, Viper/Silicon, and Z3 perform formal
-verification. Temporary verifier sources are removed after each run.
+temporary verifier source. Nagini uses Viper/Silicon and Z3. The Lean backend
+generates a theorem from the supported Python subset and the parsed contract.
+Lean's kernel checks the proof, and Proofside requires an axiom report limited
+to Lean's standard axioms, excluding `sorryAx`. Temporary verifier sources
+are removed after each run.
 
 Model output and annotation payloads are untrusted input. During proposal, a
 model receives only the selected specification sources plus structural
@@ -385,6 +418,9 @@ See [`ROADMAP.md`](ROADMAP.md) for suggested contribution directions.
 | [Nagini](https://github.com/marcoeilers/nagini) | 1.3.1 | MPL-2.0 | Direct pinned verification dependency |
 | [Viper/Silicon](https://github.com/viperproject/silicon) | Bundled by Nagini 1.3.1 | MPL-2.0 | Verification backend used through Nagini |
 | [Z3](https://github.com/Z3Prover/z3) | 4.8.7.0 on common x64 platforms | MIT | Solver installed transitively by Nagini |
+| [Lean](https://lean-lang.org/) | 4.33.1 tested | Apache-2.0 | Optional native verifier installed separately |
+
+EricSpencer00 contributed the Lean 4 backend in [PR #1](https://github.com/kli0n2323/proofside/pull/1).
 
 Proofside depends on these projects but contains no copied or adapted
 third-party source. Python and Java are execution prerequisites distributed

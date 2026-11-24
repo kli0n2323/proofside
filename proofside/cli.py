@@ -27,9 +27,10 @@ def render_proof_boundary(result: CheckResult) -> str:
     if result.contract_text is None:
         return ""
     if result.status is Status.VERIFIED:
+        verifier = "Lean 4" if result.backend == "lean" else "Nagini/Viper"
         lines = [
             "Proof boundary",
-            "- The selected implementation satisfies the displayed guarantees under the displayed assumptions, according to Nagini/Viper.",
+            f"- The selected implementation satisfies the displayed guarantees under the displayed assumptions, according to {verifier}.",
             "- Preconditions remain assumptions about valid callers and inputs.",
             "- The proof covers only the displayed contract and the supported verification semantics.",
             "- It does not establish scientific validity, empirical correspondence, usefulness, or optimality.",
@@ -80,6 +81,10 @@ def main(argv: list[str] | None = None) -> int:
         type=Path,
         help="structured JSON sidecar; omit for handwritten Nagini contracts",
     )
+    check_parser.add_argument(
+        "--backend", choices=("nagini", "lean"), default="nagini",
+        help="formal verifier (default: nagini); lean requires a JSON sidecar",
+    )
     check_all_parser = subparsers.add_parser(
         "check-all",
         help="verify Proofside-marked functions using source-adjacent contracts",
@@ -93,6 +98,10 @@ def main(argv: list[str] | None = None) -> int:
         "--allow-unreviewed",
         action="store_true",
         help="fall back to candidate contracts; still returns a nonzero exit status",
+    )
+    check_all_parser.add_argument(
+        "--backend", choices=("nagini", "lean"), default="nagini",
+        help="formal verifier for every selected function (default: nagini)",
     )
     propose_parser = subparsers.add_parser(
         "propose",
@@ -202,7 +211,7 @@ def main(argv: list[str] | None = None) -> int:
     arguments = parser.parse_args(argv)
 
     if arguments.command == "check":
-        result = check(arguments.selector, arguments.contract)
+        result = check(arguments.selector, arguments.contract, arguments.backend)
         print(render_output(result))
         return 0 if result.status is Status.VERIFIED else 1
 
@@ -210,7 +219,10 @@ def main(argv: list[str] | None = None) -> int:
         results, discovery_errors = run_batch_checks(
             tuple(arguments.targets),
             arguments.allow_unreviewed,
+            arguments.backend,
         )
+        verifier = "Lean 4" if arguments.backend == "lean" else "Nagini/Viper"
+        print(f"Selected backend: {verifier}")
         print(render_batch_output(results, discovery_errors))
         return 0 if batch_succeeded(results, discovery_errors) else 1
 

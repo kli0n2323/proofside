@@ -41,3 +41,24 @@ jobs:
       - run: python -m unittest tests.test_integration -v
         env:
           PROOFSIDE_RUN_NAGINI: "1"
+
+  lean-integration:
+    name: Lean integration (Python 3.12, Lean 4.33.1)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.12"
+      - name: Install pinned native Lean distribution
+        run: |
+          cd "$RUNNER_TEMP"
+          curl --fail --silent --show-error --location --output lean.tar.zst \
+            https://github.com/leanprover/lean4/releases/download/v4.33.1/lean-4.33.1-linux.tar.zst
+          echo '890afd185370f85666025b883914ab4f4b339136f8c96167b69cfb62aecaf235  lean.tar.zst' | sha256sum -c
+          tar --zstd -xf lean.tar.zst
+          echo "PROOFSIDE_LEAN=$RUNNER_TEMP/lean-4.33.1-linux/bin/lean" >> "$GITHUB_ENV"
+      - run: python -m pip install .
+      - run: python -m unittest tests.test_lean -v
+        env:
+          PROOFSIDE_RUN_LEAN: "1"

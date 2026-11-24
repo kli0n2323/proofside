@@ -18,6 +18,7 @@ class CheckResult:
     status: Status
     detail: str
     contract_text: str | None = None
+    backend: str = "nagini"
 
 
 def parse_selector(selector: str) -> tuple[Path, str]:
